@@ -13,6 +13,8 @@ Required Supabase services:
 - Database: `public.deals`
 - Storage bucket: `deal-product-images`
 
+For V1, `supabase.sql` also installs an auth trigger that auto-confirms email users. This keeps the personal tool usable if Supabase email confirmation is accidentally left on.
+
 If email confirmation or magic links are enabled later, add each production URL to:
 
 - Authentication > URL Configuration > Site URL

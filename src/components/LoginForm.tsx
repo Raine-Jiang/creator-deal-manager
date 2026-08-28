@@ -82,7 +82,17 @@ export function LoginForm() {
     } else if (data.session) {
       router.replace("/");
     } else {
-      setMessage("账号已创建。如果 Supabase 仍开启邮箱确认，请先按邮件完成确认；建议关闭邮箱确认以避免邮件限流。");
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+
+      if (signInError) {
+        setIsError(true);
+        setMessage("账号已创建，但暂时不能自动登录。请刷新页面后用同一邮箱和密码登录。");
+      } else {
+        router.replace("/");
+      }
     }
   }
 

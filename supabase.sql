@@ -1,5 +1,23 @@
 create extension if not exists pgcrypto;
 
+create or replace function public.auto_confirm_creator_deal_manager_email()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.email is not null and new.email_confirmed_at is null then
+    new.email_confirmed_at = now();
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists auto_confirm_creator_deal_manager_email on auth.users;
+create trigger auto_confirm_creator_deal_manager_email
+before insert or update of email on auth.users
+for each row
+execute function public.auto_confirm_creator_deal_manager_email();
+
 create table if not exists public.deals (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,

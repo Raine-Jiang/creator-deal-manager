@@ -11,6 +11,8 @@ For this personal V1 tool, the recommended Supabase setting is:
 
 This avoids repeatedly sending login emails, so it is more suitable for frequent testing and personal daily use.
 
+The project also includes a database trigger in `supabase.sql` that marks email users as confirmed on creation. This is a V1 personal-tool fallback so new accounts are not blocked by missing confirmation emails while the dashboard setting is still enabled.
+
 ## Why `email rate limit exceeded` Can Happen
 
 Supabase's default email service is intentionally rate limited to prevent abuse. During setup and testing, repeatedly requesting magic links, OTP emails or confirmation emails for the same address can trigger:
