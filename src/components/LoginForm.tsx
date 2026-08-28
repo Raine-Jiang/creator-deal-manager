@@ -12,6 +12,7 @@ export function LoginForm() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [isError, setIsError] = useState(false);
 
   useEffect(() => {
     if (!supabase) return;
@@ -25,6 +26,7 @@ export function LoginForm() {
   async function sendMagicLink(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
+    setIsError(false);
     if (!supabase) {
       setMessage("当前是演示模式。配置 Supabase 后即可登录。");
       return;
@@ -39,8 +41,17 @@ export function LoginForm() {
     });
     setLoading(false);
 
-    if (error) setMessage(error.message);
-    else setMessage("登录链接已发送，请打开邮箱点击链接进入系统。");
+    if (error) {
+      setIsError(true);
+      const lowerMessage = error.message.toLowerCase();
+      if (lowerMessage.includes("rate limit")) {
+        setMessage("发送太频繁了。Supabase 默认邮件服务有限流，请等一段时间后再试；如果已经登录过，直接回到首页通常会保持登录状态。");
+      } else {
+        setMessage(error.message);
+      }
+    } else {
+      setMessage("登录链接已发送，请打开邮箱点击链接进入系统。");
+    }
   }
 
   return (
@@ -73,7 +84,7 @@ export function LoginForm() {
           </label>
 
           {message ? (
-            <p className="rounded-2xl bg-violet-50 p-3 text-sm font-semibold text-violet-600">
+            <p className={`rounded-2xl p-3 text-sm font-semibold ${isError ? "bg-red-50 text-red-500" : "bg-violet-50 text-violet-600"}`}>
               {message}
             </p>
           ) : null}
@@ -82,7 +93,7 @@ export function LoginForm() {
             {loading ? "发送中..." : "发送登录链接"}
           </button>
           <p className="text-center text-xs font-semibold leading-5 text-muted">
-            不需要短信服务，也不用记密码。登录成功后会自动保持会话。
+            不需要短信服务。登录成功后会自动保持会话，频繁发送邮件可能触发服务商限流。
           </p>
         </form>
       </div>

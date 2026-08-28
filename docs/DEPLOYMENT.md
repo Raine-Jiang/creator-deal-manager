@@ -1,6 +1,6 @@
 # Deployment Guide
 
-This project is intended to run on Vercel with Supabase as the backend.
+This project can run on Vercel and EdgeOne Pages with Supabase as the backend.
 
 ## 1. Supabase
 
@@ -29,7 +29,7 @@ NEXT_PUBLIC_SUPABASE_PRODUCT_IMAGE_BUCKET=deal-product-images
 
 Use the same values for Production and Preview unless you later create separate Supabase projects.
 
-## 3. Free Domain
+## 3. Vercel Free Domain
 
 Vercel provides a free production URL:
 
@@ -39,7 +39,31 @@ https://your-project-name.vercel.app
 
 No custom domain is required for V1.
 
-## 4. Deploy Commands
+## 4. EdgeOne Pages Free Deployment
+
+EdgeOne Pages can import the GitHub repository and build the project directly. The root `edgeone.json` file contains the recommended build configuration:
+
+```json
+{
+  "name": "creator-deal-manager",
+  "installCommand": "npm install",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "nodeVersion": "22.11.0"
+}
+```
+
+Deployment steps:
+
+1. Open EdgeOne Pages.
+2. Import the GitHub repository.
+3. Select `Raine-Jiang/creator-deal-manager`.
+4. Confirm the build settings from `edgeone.json`.
+5. Add the same Supabase environment variables.
+6. Start deployment.
+7. Add the EdgeOne production URL to Supabase Auth URL Configuration.
+
+## 5. Deploy Commands
 
 Local validation:
 
@@ -54,7 +78,7 @@ Deploy with Vercel CLI:
 npx vercel --prod
 ```
 
-## 5. Post-deploy Checklist
+## 6. Post-deploy Checklist
 
 - Open the Vercel URL on mobile.
 - Send yourself a login magic link.
@@ -63,7 +87,7 @@ npx vercel --prod
 - Edit the same deal and add a received date.
 - Delete the test deal.
 
-## 6. Data Recovery
+## 7. Data Recovery
 
 Production data is stored in Supabase, not inside Vercel or GitHub. If the web app is redeployed, the data remains in Supabase.
 

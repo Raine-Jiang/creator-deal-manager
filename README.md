@@ -100,13 +100,20 @@ V1 的真实数据保存在 Supabase PostgreSQL，不会因为浏览器刷新、
 
 ## 部署
 
-推荐部署到 Vercel 免费额度：
+海外访问推荐部署到 Vercel 免费额度：
 
 1. 将项目推送到 GitHub。
 2. 在 Vercel 导入 GitHub 仓库。
 3. 在 Vercel Project Settings 配置环境变量。
 4. 使用 Vercel 免费的 `*.vercel.app` 域名先上线。
 5. 回到 Supabase Auth URL Configuration 添加线上域名。
+
+中国境内访问可以再部署一份 EdgeOne Pages 免费版本。项目根目录已包含 `edgeone.json`，用于告诉 EdgeOne：
+
+- Install command: `npm install`
+- Build command: `npm run build`
+- Output directory: `.next`
+- Node.js: `22.11.0`
 
 更详细步骤见 `docs/DEPLOYMENT.md`。
 
