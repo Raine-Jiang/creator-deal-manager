@@ -4,7 +4,7 @@ Creator Deal Manager 是一个手机优先的创作者商单管理 Web App / PWA
 
 ## V1 功能范围
 
-- 邮箱魔法链接登录，登录状态会自动保留
+- 邮箱密码登录，登录状态会自动保留
 - 合作列表，默认按创建时间倒序
 - 品牌 / 产品关键词搜索
 - 新建合作
@@ -33,7 +33,7 @@ Creator Deal Manager 是一个手机优先的创作者商单管理 Web App / PWA
 - React
 - TypeScript
 - Tailwind CSS
-- Supabase Auth
+- Supabase Auth Email + Password
 - Supabase PostgreSQL
 - Supabase Storage
 - Vercel
@@ -79,7 +79,8 @@ NEXT_PUBLIC_SUPABASE_PRODUCT_IMAGE_BUCKET=deal-product-images
 2. 进入 SQL Editor。
 3. 运行 `supabase.sql`。
 4. 在 Authentication 中开启 Email provider。
-5. 在 Auth URL Configuration 中添加本地地址和 Vercel 线上地址。
+5. 建议关闭 Confirm email，让个人工具注册后可直接登录，避免邮件限流。
+6. 如果仍使用邮件确认或魔法链接，在 Auth URL Configuration 中添加本地地址和线上地址。
 
 当前后端设计：
 

@@ -9,10 +9,11 @@ Run `supabase.sql` in the Supabase SQL Editor before the first production deploy
 Required Supabase services:
 
 - Authentication: Email provider enabled
+- Authentication: Confirm email disabled for simplest personal V1 login
 - Database: `public.deals`
 - Storage bucket: `deal-product-images`
 
-After deployment, add the production URL to:
+If email confirmation or magic links are enabled later, add each production URL to:
 
 - Authentication > URL Configuration > Site URL
 - Authentication > URL Configuration > Redirect URLs

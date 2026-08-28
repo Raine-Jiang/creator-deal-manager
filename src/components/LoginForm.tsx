@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Mail, Sparkles } from "lucide-react";
+import { Lock, Mail, Sparkles } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { AppShell } from "./AppShell";
 import { SetupNotice } from "./SetupNotice";
@@ -10,6 +10,7 @@ import { SetupNotice } from "./SetupNotice";
 export function LoginForm() {
   const router = useRouter();
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
@@ -23,7 +24,7 @@ export function LoginForm() {
     redirectIfSignedIn();
   }, [router]);
 
-  async function sendMagicLink(event: FormEvent<HTMLFormElement>) {
+  async function submitAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
     setIsError(false);
@@ -33,24 +34,55 @@ export function LoginForm() {
     }
 
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
-      options: {
-        emailRedirectTo: `${window.location.origin}/`,
-      },
+      password,
     });
     setLoading(false);
 
     if (error) {
       setIsError(true);
-      const lowerMessage = error.message.toLowerCase();
-      if (lowerMessage.includes("rate limit")) {
-        setMessage("发送太频繁了。Supabase 默认邮件服务有限流，请等一段时间后再试；如果已经登录过，直接回到首页通常会保持登录状态。");
+      if (error.message.toLowerCase().includes("invalid login credentials")) {
+        setMessage("邮箱或密码不正确。如果这是第一次使用，请先点击下方“创建账号”。");
       } else {
         setMessage(error.message);
       }
     } else {
-      setMessage("登录链接已发送，请打开邮箱点击链接进入系统。");
+      router.replace("/");
+    }
+  }
+
+  async function createAccount() {
+    setMessage("");
+    setIsError(false);
+    if (!supabase) {
+      setMessage("当前是演示模式。配置 Supabase 后即可登录。");
+      return;
+    }
+    if (!email.trim() || password.length < 6) {
+      setIsError(true);
+      setMessage("请输入邮箱，并设置至少 6 位密码。");
+      return;
+    }
+
+    setLoading(true);
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+    });
+    setLoading(false);
+
+    if (error) {
+      setIsError(true);
+      if (error.message.toLowerCase().includes("already registered")) {
+        setMessage("这个邮箱已经创建过账号，请直接登录。");
+      } else {
+        setMessage(error.message);
+      }
+    } else if (data.session) {
+      router.replace("/");
+    } else {
+      setMessage("账号已创建。如果 Supabase 仍开启邮箱确认，请先按邮件完成确认；建议关闭邮箱确认以避免邮件限流。");
     }
   }
 
@@ -70,7 +102,7 @@ export function LoginForm() {
 
         {!isSupabaseConfigured ? <SetupNotice /> : null}
 
-        <form onSubmit={sendMagicLink} className="card mt-5 space-y-4 p-5">
+        <form onSubmit={submitAuth} className="card mt-5 space-y-4 p-5">
           <label className="login-field">
             <Mail className="h-5 w-5 text-muted" />
             <input
@@ -83,6 +115,19 @@ export function LoginForm() {
             />
           </label>
 
+          <label className="login-field">
+            <Lock className="h-5 w-5 text-muted" />
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="输入密码"
+              className="min-w-0 flex-1 bg-transparent font-bold outline-none placeholder:text-muted"
+              minLength={6}
+              required
+            />
+          </label>
+
           {message ? (
             <p className={`rounded-2xl p-3 text-sm font-semibold ${isError ? "bg-red-50 text-red-500" : "bg-violet-50 text-violet-600"}`}>
               {message}
@@ -90,10 +135,18 @@ export function LoginForm() {
           ) : null}
 
           <button className="primary-button w-full justify-center py-4 text-lg" disabled={loading}>
-            {loading ? "发送中..." : "发送登录链接"}
+            {loading ? "处理中..." : "登录"}
+          </button>
+          <button
+            type="button"
+            onClick={createAccount}
+            disabled={loading}
+            className="w-full rounded-[18px] bg-warm py-3.5 text-base font-black text-ink disabled:opacity-50"
+          >
+            创建账号
           </button>
           <p className="text-center text-xs font-semibold leading-5 text-muted">
-            不需要短信服务。登录成功后会自动保持会话，频繁发送邮件可能触发服务商限流。
+            不需要短信验证码，也不需要每次收邮件。登录成功后会自动保持会话。
           </p>
         </form>
       </div>
