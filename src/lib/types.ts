@@ -1,4 +1,6 @@
-export type Platform = "小红书" | "抖音" | "其他" | "";
+export type PlatformOption = "小红书" | "抖音" | "其他";
+export type Platform = PlatformOption | "";
+export const platformOptions: PlatformOption[] = ["小红书", "抖音", "其他"];
 export type ProductCategory =
   | "上衣"
   | "裤子"
@@ -25,6 +27,7 @@ export type Deal = {
   cooperation_date: string | null;
   product_image_url: string | null;
   platform: Platform | null;
+  platforms: PlatformOption[] | null;
   product_price: number | null;
   base_fee: number | null;
   commission: string | null;
@@ -60,6 +63,7 @@ export const emptyDealValues: DealFormValues = {
   product_category: "",
   cooperation_date: "",
   platform: "",
+  platforms: [],
   product_price: null,
   base_fee: null,
   commission: "",

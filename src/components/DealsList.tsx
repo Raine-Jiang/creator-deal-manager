@@ -23,7 +23,7 @@ export function DealsList() {
     return deals.filter((deal) => {
       const matchQuery =
         !trimmed ||
-        [deal.brand, deal.product_name, deal.product_category].some((value) => value?.toLowerCase().includes(trimmed));
+        [deal.brand, deal.product_name, deal.product_category, deal.platform, ...(deal.platforms || [])].some((value) => value?.toLowerCase().includes(trimmed));
       const matchFilter = filter === "全部" || getDealStatus(deal) === filter;
       return matchQuery && matchFilter;
     });

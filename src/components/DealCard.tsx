@@ -12,6 +12,7 @@ export function DealCard({ deal }: { deal: Deal }) {
   const status = getDealStatus(deal);
   const nextTask = getDealTasks(deal)[0];
   const visual = cardVisual(status, Boolean(nextTask?.overdue));
+  const platforms = deal.platforms?.length ? deal.platforms : deal.platform ? [deal.platform] : [];
 
   return (
     <Link
@@ -26,10 +27,10 @@ export function DealCard({ deal }: { deal: Deal }) {
               <h2 className="truncate text-lg font-black leading-tight">
                 {displayTitle(deal.brand, deal.product_name)}
               </h2>
-              {deal.platform || deal.product_category ? (
+              {platforms.length || deal.product_category ? (
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   {deal.product_category ? <span className="rounded-full bg-white/72 px-2.5 py-0.5 text-xs font-black text-violet-600">{deal.product_category}</span> : null}
-                  {deal.platform ? <span className="rounded-full bg-white/72 px-2.5 py-0.5 text-xs font-black text-muted">{deal.platform}</span> : null}
+                  {platforms.map((platform) => <span key={platform} className="rounded-full bg-white/72 px-2.5 py-0.5 text-xs font-black text-muted">{platform}</span>)}
                 </div>
               ) : null}
             </div>

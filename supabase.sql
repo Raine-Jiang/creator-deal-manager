@@ -29,6 +29,7 @@ create table if not exists public.deals (
   cooperation_date date,
   product_image_url text,
   platform text check (platform is null or platform in ('小红书', '抖音', '其他')),
+  platforms text[] default '{}',
   product_price numeric,
   base_fee numeric,
   commission text,
@@ -56,6 +57,15 @@ alter table public.deals
 
 alter table public.deals
   add column if not exists cooperation_date date;
+
+alter table public.deals
+  add column if not exists platforms text[] default '{}';
+
+update public.deals
+set platforms = array[platform]
+where platform is not null
+  and platform <> ''
+  and (platforms is null or cardinality(platforms) = 0);
 
 create index if not exists deals_user_created_idx
   on public.deals (user_id, created_at desc);

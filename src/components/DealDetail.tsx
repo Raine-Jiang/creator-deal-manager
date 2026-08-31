@@ -126,10 +126,12 @@ export function DealDetail({ id }: { id: string }) {
                   <h2 className="min-w-0 text-2xl font-black leading-tight">{displayTitle(deal.brand, deal.product_name)}</h2>
                   <StatusChip status={getDealStatus(deal)} />
                 </div>
-                {deal.platform || deal.product_category ? (
+                {(deal.platforms?.length || deal.platform || deal.product_category) ? (
                   <div className="mt-2 flex flex-wrap gap-2">
                     {deal.product_category ? <p className="inline-flex rounded-full bg-violet-100 px-3 py-1 text-sm font-black text-violet-600">{deal.product_category}</p> : null}
-                    {deal.platform ? <p className="inline-flex rounded-full bg-pink-100 px-3 py-1 text-sm font-black text-pink">{deal.platform}</p> : null}
+                    {(deal.platforms?.length ? deal.platforms : deal.platform ? [deal.platform] : []).map((platform) => (
+                      <p key={platform} className="inline-flex rounded-full bg-pink-100 px-3 py-1 text-sm font-black text-pink">{platform}</p>
+                    ))}
                   </div>
                 ) : null}
               </div>
@@ -156,7 +158,7 @@ export function DealDetail({ id }: { id: string }) {
             <Info label="品牌" value={deal.brand} />
             <Info label="产品" value={deal.product_name} />
             <Info label="品类" value={deal.product_category} />
-            <Info label="平台" value={deal.platform} />
+            <Info label="平台" value={(deal.platforms?.length ? deal.platforms : deal.platform ? [deal.platform] : []).join("、")} />
             <Info label="合作日期" value={fullDate(deal.cooperation_date || deal.created_at)} />
             <Info label="商品链接" value={deal.product_url} link />
           </DetailSection>

@@ -15,37 +15,38 @@ import {
   Trash2,
   WalletCards,
 } from "lucide-react";
-import type { Deal, DealFormValues, Platform, ProductCategory } from "@/lib/types";
-import { emptyDealValues } from "@/lib/types";
+import type { Deal, DealFormValues, Platform, PlatformOption, ProductCategory } from "@/lib/types";
+import { emptyDealValues, platformOptions } from "@/lib/types";
 import {
   isSupabaseConfigured,
   PRODUCT_IMAGE_BUCKET,
   supabase,
   type Database,
 } from "@/lib/supabase";
+import { todayKey } from "@/lib/date-utils";
+import { shortDate } from "@/lib/format";
 import { AppShell } from "./AppShell";
 import { ProductMark } from "./ProductMark";
 import { SetupNotice } from "./SetupNotice";
-import { todayKey } from "@/lib/date-utils";
 
 type Props = {
   mode: "create" | "edit";
   deal?: Deal | null;
 };
 
-const platformOptions = ["", "小红书", "抖音", "其他"];
 const categoryOptions: ProductCategory[] = ["", "上衣", "裤子", "鞋子", "卫衣", "裙子", "包包", "帽子", "配饰", "运动套装", "美妆个护", "食品饮品", "其他"];
 type DealInsert = Database["public"]["Tables"]["deals"]["Insert"];
 type DealUpdate = Database["public"]["Tables"]["deals"]["Update"];
 
 function toFormValues(deal?: Deal | null): DealFormValues {
-  if (!deal) return emptyDealValues;
+  if (!deal) return { ...emptyDealValues, cooperation_date: todayKey() };
   return {
     brand: deal.brand || "",
     product_name: deal.product_name || "",
     product_category: deal.product_category || "",
     cooperation_date: deal.cooperation_date || deal.created_at?.slice(0, 10) || "",
     platform: deal.platform || "",
+    platforms: deal.platforms?.length ? deal.platforms : deal.platform ? [deal.platform as PlatformOption] : [],
     product_price: deal.product_price,
     base_fee: deal.base_fee,
     commission: deal.commission || "",
@@ -83,13 +84,14 @@ function cleanNumber(value: number | null) {
 function missingNewBusinessColumns(error: unknown) {
   if (!error || typeof error !== "object") return false;
   const maybeError = error as { code?: string; message?: string };
-  return maybeError.code === "PGRST204" || Boolean(maybeError.message?.includes("product_category") || maybeError.message?.includes("cooperation_date"));
+  return maybeError.code === "PGRST204" || Boolean(maybeError.message?.includes("product_category") || maybeError.message?.includes("cooperation_date") || maybeError.message?.includes("platforms"));
 }
 
-function withoutNewBusinessColumns<T extends { product_category?: unknown; cooperation_date?: unknown }>(payload: T) {
+function withoutNewBusinessColumns<T extends { product_category?: unknown; cooperation_date?: unknown; platforms?: unknown }>(payload: T) {
   const next = { ...payload };
   delete next.product_category;
   delete next.cooperation_date;
+  delete next.platforms;
   return next;
 }
 
@@ -120,6 +122,20 @@ export function DealForm({ mode, deal }: Props) {
       [key]: checked,
       [dateKey]: checked && !current[dateKey] ? new Date().toISOString().slice(0, 10) : current[dateKey],
     }));
+  }
+
+  function togglePlatform(option: PlatformOption) {
+    setValues((current) => {
+      const selected = current.platforms || [];
+      const next = selected.includes(option)
+        ? selected.filter((item) => item !== option)
+        : [...selected, option];
+      return {
+        ...current,
+        platforms: next,
+        platform: (next[0] || "") as DealFormValues["platform"],
+      };
+    });
   }
 
   function onImageChange(event: ChangeEvent<HTMLInputElement>) {
@@ -159,13 +175,15 @@ export function DealForm({ mode, deal }: Props) {
 
       const dealId = mode === "edit" && deal ? deal.id : crypto.randomUUID();
       const imageUrl = await uploadImage(userId, dealId);
+      const selectedPlatforms = values.platforms?.length ? values.platforms : values.platform ? [values.platform as PlatformOption] : [];
       const dealFields = {
         brand: cleanString(values.brand),
         product_name: cleanString(values.product_name),
         product_category: cleanString(values.product_category) as ProductCategory | null,
         cooperation_date: cleanString(values.cooperation_date),
         product_image_url: cleanString(imageUrl),
-        platform: cleanString(values.platform) as Platform | null,
+        platform: cleanString(selectedPlatforms[0]) as Platform | null,
+        platforms: selectedPlatforms.length ? selectedPlatforms : null,
         product_price: cleanNumber(values.product_price),
         base_fee: cleanNumber(values.base_fee),
         commission: cleanString(values.commission),
@@ -268,14 +286,26 @@ export function DealForm({ mode, deal }: Props) {
             </select>
           </label>
           <DateInput label="合作日期" value={values.cooperation_date || todayKey()} onChange={(value) => setField("cooperation_date", value)} />
-          <label className="form-row">
-            <span>平台</span>
-            <select value={values.platform || ""} onChange={(event) => setField("platform", event.target.value as DealFormValues["platform"])} className="form-control">
-              {platformOptions.map((option) => (
-                <option key={option} value={option}>{option || "请选择平台"}</option>
-              ))}
-            </select>
-          </label>
+          <div className="py-3">
+            <div className="mb-3 text-base font-black">发布平台</div>
+            <div className="grid grid-cols-3 gap-2">
+              {platformOptions.map((option) => {
+                const active = Boolean(values.platforms?.includes(option));
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => togglePlatform(option)}
+                    className={`min-h-11 rounded-[16px] border px-3 text-sm font-black transition ${
+                      active ? "border-black bg-black text-white" : "border-black/[0.06] bg-white/70 text-ink"
+                    }`}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <label className="flex min-w-0 cursor-pointer items-center gap-3 py-3">
             <span className="w-[86px] shrink-0 text-base font-black max-[390px]:w-[76px]">产品图</span>
             <div className="min-w-0 flex-1 text-right text-sm font-bold text-muted">
@@ -483,12 +513,20 @@ function DateInput({
   return (
     <label className="form-row">
       <span>{label}</span>
-      <input
-        type="date"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="form-control"
-      />
+      <span className="relative ml-auto flex min-w-0 flex-1 justify-end">
+        <span className={`pointer-events-none flex h-10 min-w-[118px] items-center justify-center rounded-[14px] border px-3 pr-9 text-sm font-black ${
+          value ? "border-black/[0.05] bg-white/78 text-ink" : "border-black/[0.04] bg-white/55 text-muted"
+        }`}>
+          {value ? shortDate(value) : "选择日期"}
+        </span>
+        <CalendarDays className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink" />
+        <input
+          type="date"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="absolute inset-y-0 right-0 h-10 w-[150px] cursor-pointer opacity-0"
+        />
+      </span>
     </label>
   );
 }

@@ -28,6 +28,7 @@ export function ArchivedDeals() {
           deal.product_name,
           deal.product_category,
           deal.platform,
+          ...(deal.platforms || []),
           deal.cooperation_date,
           deal.notes,
           deal.product_url,
