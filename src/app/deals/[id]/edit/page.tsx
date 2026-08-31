@@ -37,7 +37,7 @@ export default function EditDealPage() {
 
   if (loading) {
     return (
-      <AppShell>
+      <AppShell showNav={false}>
         <p className="card mt-8 p-6 text-center font-bold text-muted">正在读取合作...</p>
       </AppShell>
     );

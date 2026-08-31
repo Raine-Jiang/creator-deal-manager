@@ -25,6 +25,8 @@ create table if not exists public.deals (
   updated_at timestamptz not null default now(),
   brand text,
   product_name text,
+  product_category text,
+  cooperation_date date,
   product_image_url text,
   platform text check (platform is null or platform in ('小红书', '抖音', '其他')),
   product_price numeric,
@@ -32,18 +34,52 @@ create table if not exists public.deals (
   commission text,
   advance_amount numeric,
   received_date date,
+  shoot_deadline date,
   shoot_date date,
   publish_deadline date,
   publish_date date,
   expected_payment_date date,
+  payment_received boolean not null default false,
+  payment_received_date date,
   expected_refund_date date,
+  refund_received boolean not null default false,
+  refund_received_date date,
   product_url text,
   publish_url text,
-  notes text
+  notes text,
+  completed boolean not null default false,
+  archived_at timestamptz
 );
+
+alter table public.deals
+  add column if not exists product_category text;
+
+alter table public.deals
+  add column if not exists cooperation_date date;
 
 create index if not exists deals_user_created_idx
   on public.deals (user_id, created_at desc);
+
+create index if not exists deals_user_publish_deadline_idx
+  on public.deals (user_id, publish_deadline);
+
+create index if not exists deals_user_shoot_deadline_idx
+  on public.deals (user_id, shoot_deadline);
+
+create index if not exists deals_user_payment_date_idx
+  on public.deals (user_id, expected_payment_date);
+
+create index if not exists deals_user_refund_date_idx
+  on public.deals (user_id, expected_refund_date);
+
+create index if not exists deals_user_archived_idx
+  on public.deals (user_id, archived_at);
+
+create index if not exists deals_user_product_category_idx
+  on public.deals (user_id, product_category);
+
+create index if not exists deals_user_cooperation_date_idx
+  on public.deals (user_id, cooperation_date);
 
 create or replace function public.set_updated_at()
 returns trigger

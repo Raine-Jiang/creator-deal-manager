@@ -4,14 +4,31 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CalendarDays, Edit3, LinkIcon, WalletCards } from "lucide-react";
+import {
+  Archive,
+  ArrowLeft,
+  CalendarDays,
+  Camera,
+  CheckCircle2,
+  Edit3,
+  LinkIcon,
+  RotateCcw,
+  Send,
+  WalletCards,
+} from "lucide-react";
 import type { Deal } from "@/lib/types";
 import { demoDeals } from "@/lib/demo-data";
-import { displayTitle, fullDate, money } from "@/lib/format";
+import { canCompleteDeal, getDealStatus, hasAmount } from "@/lib/deal-status";
+import { todayKey } from "@/lib/date-utils";
+import { displayTitle, fullDate, fullDateTime, money } from "@/lib/format";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { AppShell } from "./AppShell";
 import { ProductMark } from "./ProductMark";
 import { SetupNotice } from "./SetupNotice";
+import { StatusChip } from "./StatusChip";
+
+type ActionType = "shoot" | "publish" | "payment" | "refund";
+type DealUpdate = Partial<Omit<Deal, "id" | "user_id" | "created_at">>;
 
 export function DealDetail({ id }: { id: string }) {
   const router = useRouter();
@@ -20,6 +37,9 @@ export function DealDetail({ id }: { id: string }) {
   );
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [error, setError] = useState("");
+  const [sheet, setSheet] = useState<ActionType | null>(null);
+  const [actionDate, setActionDate] = useState(todayKey());
+  const [publishUrl, setPublishUrl] = useState("");
 
   useEffect(() => {
     if (!supabase) return;
@@ -35,16 +55,51 @@ export function DealDetail({ id }: { id: string }) {
         .eq("id", id)
         .single();
       if (loadError) setError(loadError.message);
-      else setDeal(data);
+      else setDeal(data as Deal);
       setLoading(false);
     }
     load();
   }, [id, router]);
 
+  async function updateDeal(fields: DealUpdate) {
+    if (!deal) return;
+    const next = { ...deal, ...fields, updated_at: new Date().toISOString() };
+    if (!supabase) {
+      setDeal(next);
+      return;
+    }
+    const { error: updateError } = await supabase
+      .from("deals")
+      .update({ ...fields, updated_at: next.updated_at } as DealUpdate)
+      .eq("id", deal.id);
+    if (updateError) setError(updateError.message);
+    else setDeal(next);
+  }
+
+  async function submitQuickAction() {
+    if (!sheet) return;
+    const fields: DealUpdate =
+      sheet === "shoot"
+        ? { shoot_date: actionDate }
+        : sheet === "publish"
+          ? { publish_date: actionDate, publish_url: publishUrl || deal?.publish_url || null }
+          : sheet === "payment"
+            ? { payment_received: true, payment_received_date: actionDate }
+            : { refund_received: true, refund_received_date: actionDate };
+    await updateDeal(fields);
+    setSheet(null);
+  }
+
+  function openSheet(type: ActionType) {
+    setActionDate(todayKey());
+    setPublishUrl(deal?.publish_url || "");
+    setSheet(type);
+  }
+
   return (
     <AppShell>
       <div className="flex items-center justify-between pt-2">
-        <Link href="/" className="icon-button" aria-label="返回">
+        <Link href="/deals" className="icon-button" aria-label="返回">
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <h1 className="text-2xl font-black">合作详情</h1>
@@ -57,37 +112,52 @@ export function DealDetail({ id }: { id: string }) {
         )}
       </div>
 
-      {!isSupabaseConfigured ? (
-        <div className="mt-6">
-          <SetupNotice />
-        </div>
-      ) : null}
-
+      {!isSupabaseConfigured ? <div className="mt-6"><SetupNotice /></div> : null}
       {loading ? <p className="card mt-6 p-6 text-center font-bold text-muted">正在读取详情...</p> : null}
       {error ? <p className="mt-6 rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-600">{error}</p> : null}
 
       {deal ? (
-        <div className="mt-6 space-y-4 pb-8">
-          <section className="card p-5">
-            <div className="flex items-center gap-5">
+        <div className="mt-6 space-y-4">
+          <section className="relative overflow-hidden rounded-[28px] border border-blue-100 bg-[linear-gradient(135deg,#f8fcff,#f0e7ff)] p-5 shadow-soft">
+            <div className="flex items-center gap-4">
               <ProductMark imageUrl={deal.product_image_url} label={deal.product_name} size="lg" />
-              <div className="min-w-0">
-                <h2 className="text-3xl font-black leading-tight">
-                  {displayTitle(deal.brand, deal.product_name)}
-                </h2>
-                {deal.platform ? (
-                  <p className="mt-3 inline-flex rounded-full bg-pink-100 px-3 py-1 text-sm font-black text-pink">
-                    {deal.platform}
-                  </p>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-2">
+                  <h2 className="min-w-0 text-2xl font-black leading-tight">{displayTitle(deal.brand, deal.product_name)}</h2>
+                  <StatusChip status={getDealStatus(deal)} />
+                </div>
+                {deal.platform || deal.product_category ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {deal.product_category ? <p className="inline-flex rounded-full bg-violet-100 px-3 py-1 text-sm font-black text-violet-600">{deal.product_category}</p> : null}
+                    {deal.platform ? <p className="inline-flex rounded-full bg-pink-100 px-3 py-1 text-sm font-black text-pink">{deal.platform}</p> : null}
+                  </div>
                 ) : null}
               </div>
+            </div>
+            <span className="absolute right-4 top-20 flex h-14 w-14 items-center justify-center rounded-full bg-yellow-300/80 text-xl font-black shadow-soft">
+              :)
+            </span>
+          </section>
+
+          <section className="rounded-[24px] border border-blue-200 bg-[linear-gradient(135deg,#f5fbff,#e7f2ff)] p-4 shadow-soft">
+            <h3 className="mb-3 text-lg font-black">快捷记录</h3>
+            <div className="grid grid-cols-2 gap-2.5">
+              {!deal.shoot_date ? <QuickButton label="已拍摄" icon={<Camera className="h-4 w-4" />} onClick={() => openSheet("shoot")} /> : null}
+              {!deal.publish_date ? <QuickButton label="已发布" icon={<Send className="h-4 w-4" />} onClick={() => openSheet("publish")} /> : null}
+              {hasAmount(deal.base_fee) && !deal.payment_received ? <QuickButton label="合作费已收" icon={<WalletCards className="h-4 w-4" />} onClick={() => openSheet("payment")} /> : null}
+              {hasAmount(deal.advance_amount) && !deal.refund_received ? <QuickButton label="本金已返" icon={<RotateCcw className="h-4 w-4" />} onClick={() => openSheet("refund")} /> : null}
+              {!deal.completed && canCompleteDeal(deal) ? <QuickButton label="完成合作" icon={<CheckCircle2 className="h-4 w-4" />} onClick={() => updateDeal({ completed: true })} /> : null}
+              {deal.completed && !deal.archived_at ? <QuickButton label="归档合作" icon={<Archive className="h-4 w-4" />} onClick={() => updateDeal({ archived_at: new Date().toISOString() })} /> : null}
+              {deal.archived_at ? <QuickButton label="恢复合作" icon={<Archive className="h-4 w-4" />} onClick={() => updateDeal({ archived_at: null })} /> : null}
             </div>
           </section>
 
           <DetailSection title="基本信息" icon={<ShoppingIcon />}>
             <Info label="品牌" value={deal.brand} />
             <Info label="产品" value={deal.product_name} />
+            <Info label="品类" value={deal.product_category} />
             <Info label="平台" value={deal.platform} />
+            <Info label="合作日期" value={fullDate(deal.cooperation_date || deal.created_at)} />
             <Info label="商品链接" value={deal.product_url} link />
           </DetailSection>
 
@@ -96,10 +166,14 @@ export function DealDetail({ id }: { id: string }) {
             <Info label="合作费" value={money(deal.base_fee)} highlight />
             <Info label="佣金" value={deal.commission} highlight />
             <Info label="垫付金额" value={money(deal.advance_amount)} highlight />
+            <Info label="合作费到账" value={deal.payment_received ? fullDate(deal.payment_received_date) || "已到账" : null} />
+            <Info label="本金返还" value={deal.refund_received ? fullDate(deal.refund_received_date) || "已返还" : null} />
           </DetailSection>
 
           <DetailSection title="时间" icon={<CalendarDays className="h-5 w-5" />}>
+            <Info label="创建合作" value={fullDateTime(deal.created_at)} />
             <Info label="收货日期" value={fullDate(deal.received_date)} />
+            <Info label="最晚拍摄" value={fullDate(deal.shoot_deadline)} />
             <Info label="拍摄日期" value={fullDate(deal.shoot_date)} />
             <Info label="最晚发布" value={fullDate(deal.publish_deadline)} highlight />
             <Info label="实际发布" value={fullDate(deal.publish_date)} />
@@ -113,62 +187,64 @@ export function DealDetail({ id }: { id: string }) {
           </DetailSection>
         </div>
       ) : null}
+
+      {sheet ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/20 px-3 pb-3" onClick={() => setSheet(null)}>
+          <div className="w-full max-w-[430px] rounded-[28px] bg-white p-5 shadow-lift" onClick={(event) => event.stopPropagation()}>
+            <h3 className="text-xl font-black">{sheetTitle(sheet)}</h3>
+            <label className="form-row mt-3">
+              <span>日期</span>
+              <input type="date" value={actionDate} onChange={(event) => setActionDate(event.target.value)} className="form-control" />
+            </label>
+            {sheet === "publish" ? (
+              <label className="form-row">
+                <span>链接</span>
+                <input value={publishUrl} onChange={(event) => setPublishUrl(event.target.value)} placeholder="发布链接（选填）" className="form-control" />
+              </label>
+            ) : null}
+            <button onClick={submitQuickAction} className="primary-button mt-4 w-full justify-center py-4">确认</button>
+          </div>
+        </div>
+      ) : null}
     </AppShell>
   );
 }
 
-function DetailSection({
-  title,
-  icon,
-  children,
-}: {
-  title: string;
-  icon: ReactNode;
-  children: ReactNode;
-}) {
-  const visibleChildren = Array.isArray(children)
-    ? children.filter(Boolean)
-    : children;
+function sheetTitle(type: ActionType) {
+  return { shoot: "标记已拍摄", publish: "标记已发布", payment: "合作费已收", refund: "本金已返" }[type];
+}
 
+function QuickButton({ label, icon, onClick }: { label: string; icon: ReactNode; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="flex min-h-12 items-center justify-center gap-2 rounded-[18px] bg-warm px-3 text-sm font-black text-ink">
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+function DetailSection({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
   return (
     <section className="card p-5">
       <div className="mb-2 flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-100 text-violet-600">
-          {icon}
-        </div>
+        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-100 text-violet-600">{icon}</div>
         <h3 className="text-lg font-black">{title}</h3>
       </div>
-      <div className="divide-y divide-stone-100">{visibleChildren}</div>
+      <div className="divide-y divide-stone-100">{children}</div>
     </section>
   );
 }
 
-function Info({
-  label,
-  value,
-  highlight,
-  link,
-}: {
-  label: string;
-  value?: string | null;
-  highlight?: boolean;
-  link?: boolean;
-}) {
+function Info({ label, value, highlight, link }: { label: string; value?: string | null; highlight?: boolean; link?: boolean }) {
   if (!value) return null;
   const content = link ? (
-    <a href={value} target="_blank" rel="noreferrer" className="break-all text-blue">
-      {value}
-    </a>
-  ) : (
-    value
-  );
+    <a href={value} target="_blank" rel="noreferrer" className="break-all text-blue">{value}</a>
+  ) : value;
 
   return (
     <div className="flex gap-4 py-3 text-base">
       <span className="w-24 shrink-0 font-bold text-muted">{label}</span>
-      <span className={`min-w-0 flex-1 font-black ${highlight ? "text-pink" : "text-ink"}`}>
-        {content}
-      </span>
+      <span className={`min-w-0 flex-1 break-words font-black ${highlight ? "text-pink" : "text-ink"}`}>{content}</span>
     </div>
   );
 }
