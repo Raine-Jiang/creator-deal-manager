@@ -2,32 +2,40 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Archive, Plus, Search } from "lucide-react";
+import { ArrowDownUp, Plus, Search } from "lucide-react";
 import type { DealStatus } from "@/lib/types";
 import { getDealStatus } from "@/lib/deal-status";
+import { todayKey } from "@/lib/date-utils";
 import { useDeals } from "@/lib/use-deals";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { AppShell } from "./AppShell";
 import { DealCard } from "./DealCard";
 import { SetupNotice } from "./SetupNotice";
 
-const filters: Array<"全部" | DealStatus> = ["全部", "待拍摄", "待发布", "待收款", "已完成"];
+const filters: Array<"全部" | DealStatus> = ["全部", "待发布", "已发布", "已完成"];
+const dateFilters = ["全部日期", "本月发布", "未来30天", "未填日期"] as const;
+const sortOptions = ["发布日期近到远", "发布日期远到近"] as const;
 
 export function DealsList() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<(typeof filters)[number]>("全部");
-  const { deals, loading, error } = useDeals(false);
+  const [dateFilter, setDateFilter] = useState<(typeof dateFilters)[number]>("全部日期");
+  const [sortBy, setSortBy] = useState<(typeof sortOptions)[number]>("发布日期近到远");
+  const { deals, loading, error } = useDeals("all");
 
   const filteredDeals = useMemo(() => {
     const trimmed = query.trim().toLowerCase();
-    return deals.filter((deal) => {
-      const matchQuery =
-        !trimmed ||
-        [deal.brand, deal.product_name, deal.product_category, deal.platform, ...(deal.platforms || [])].some((value) => value?.toLowerCase().includes(trimmed));
-      const matchFilter = filter === "全部" || getDealStatus(deal) === filter;
-      return matchQuery && matchFilter;
-    });
-  }, [deals, filter, query]);
+    return deals
+      .filter((deal) => {
+        const matchQuery =
+          !trimmed ||
+          [deal.brand, deal.product_name, deal.product_category, deal.notes, deal.platform, ...(deal.platforms || [])].some((value) => value?.toLowerCase().includes(trimmed));
+        const matchFilter = filter === "全部" || getDealStatus(deal) === filter;
+        const matchDate = matchesDateFilter(deal.publish_deadline, dateFilter);
+        return matchQuery && matchFilter && matchDate;
+      })
+      .sort((a, b) => sortPublishDate(a.publish_deadline, b.publish_deadline, sortBy));
+  }, [deals, dateFilter, filter, query, sortBy]);
 
   return (
     <AppShell>
@@ -47,7 +55,7 @@ export function DealsList() {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索品牌 / 产品"
+            placeholder="搜索品牌 / 产品 / 备注"
             className="min-w-0 flex-1 bg-transparent text-base font-semibold outline-none placeholder:text-muted"
           />
         </label>
@@ -65,10 +73,29 @@ export function DealsList() {
             {item}
           </button>
         ))}
-        <Link href="/deals/archived" className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white px-4 py-2 text-sm font-black text-muted">
-          <Archive className="h-4 w-4" />
-          归档
-        </Link>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <label className="flex min-w-0 items-center gap-2 rounded-[18px] border border-black/[0.06] bg-white/72 px-3 py-2">
+          <Search className="h-4 w-4 shrink-0 text-muted" />
+          <select
+            value={dateFilter}
+            onChange={(event) => setDateFilter(event.target.value as (typeof dateFilters)[number])}
+            className="min-w-0 flex-1 bg-transparent text-sm font-black outline-none"
+          >
+            {dateFilters.map((item) => <option key={item}>{item}</option>)}
+          </select>
+        </label>
+        <label className="flex min-w-0 items-center gap-2 rounded-[18px] border border-black/[0.06] bg-white/72 px-3 py-2">
+          <ArrowDownUp className="h-4 w-4 shrink-0 text-muted" />
+          <select
+            value={sortBy}
+            onChange={(event) => setSortBy(event.target.value as (typeof sortOptions)[number])}
+            className="min-w-0 flex-1 bg-transparent text-sm font-black outline-none"
+          >
+            {sortOptions.map((item) => <option key={item}>{item}</option>)}
+          </select>
+        </label>
       </div>
 
       {!isSupabaseConfigured ? <div className="mt-4"><SetupNotice /></div> : null}
@@ -92,4 +119,31 @@ export function DealsList() {
       </section>
     </AppShell>
   );
+}
+
+function matchesDateFilter(value: string | null, filter: (typeof dateFilters)[number]) {
+  if (filter === "全部日期") return true;
+  if (!value) return filter === "未填日期";
+  if (filter === "未填日期") return false;
+
+  const today = todayKey();
+  const date = new Date(`${value}T00:00:00`);
+  const now = new Date(`${today}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return false;
+
+  if (filter === "本月发布") {
+    return value.slice(0, 7) === today.slice(0, 7);
+  }
+
+  const diff = date.getTime() - now.getTime();
+  return diff >= 0 && diff <= 30 * 86400000;
+}
+
+function sortPublishDate(a: string | null, b: string | null, sortBy: (typeof sortOptions)[number]) {
+  const emptyA = a ? 0 : 1;
+  const emptyB = b ? 0 : 1;
+  if (emptyA !== emptyB) return emptyA - emptyB;
+  const timeA = a ? new Date(`${a}T00:00:00`).getTime() : 0;
+  const timeB = b ? new Date(`${b}T00:00:00`).getTime() : 0;
+  return sortBy === "发布日期近到远" ? timeB - timeA : timeA - timeB;
 }

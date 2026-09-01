@@ -30,6 +30,8 @@ create table if not exists public.deals (
   product_image_url text,
   platform text check (platform is null or platform in ('小红书', '抖音', '其他')),
   platforms text[] default '{}',
+  advance_required boolean default false,
+  collaboration_type text check (collaboration_type is null or collaboration_type in ('送拍', '寄拍')),
   product_price numeric,
   base_fee numeric,
   commission text,
@@ -49,7 +51,8 @@ create table if not exists public.deals (
   publish_url text,
   notes text,
   completed boolean not null default false,
-  archived_at timestamptz
+  archived_at timestamptz,
+  deleted_at timestamptz
 );
 
 alter table public.deals
@@ -60,6 +63,15 @@ alter table public.deals
 
 alter table public.deals
   add column if not exists platforms text[] default '{}';
+
+alter table public.deals
+  add column if not exists advance_required boolean default false;
+
+alter table public.deals
+  add column if not exists collaboration_type text;
+
+alter table public.deals
+  add column if not exists deleted_at timestamptz;
 
 update public.deals
 set platforms = array[platform]
@@ -84,6 +96,9 @@ create index if not exists deals_user_refund_date_idx
 
 create index if not exists deals_user_archived_idx
   on public.deals (user_id, archived_at);
+
+create index if not exists deals_user_deleted_idx
+  on public.deals (user_id, deleted_at);
 
 create index if not exists deals_user_product_category_idx
   on public.deals (user_id, product_category);

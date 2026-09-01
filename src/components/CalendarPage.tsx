@@ -3,14 +3,14 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { getCalendarEvents, taskMeta } from "@/lib/deal-status";
+import { getCalendarEvents } from "@/lib/deal-status";
 import { monthMatrix, monthTitle, todayKey } from "@/lib/date-utils";
 import { money } from "@/lib/format";
 import { useDeals } from "@/lib/use-deals";
 import { AppShell } from "./AppShell";
 
 const week = ["日", "一", "二", "三", "四", "五", "六"];
-const labelOrder = ["合作建联", "收货", "最晚拍摄", "已拍摄", "最晚发布", "已发布", "预计回款", "合作费到账", "预计返本", "本金已返"];
+const labelOrder = ["待拍摄", "已拍摄", "已发布", "已完成"];
 
 export function CalendarPage() {
   const now = new Date();
@@ -98,7 +98,7 @@ export function CalendarPage() {
                       <article className="flex min-w-0 items-center justify-between gap-3 rounded-[18px] bg-white/78 p-3">
                         <div className="min-w-0">
                           <p className="truncate text-base font-black">{event.title}</p>
-                          <p className={`mt-1 text-sm font-bold ${event.overdue ? "text-red-500" : "text-muted"}`}>{event.overdue ? "已逾期" : event.completed ? "已记录" : "待处理"}</p>
+                          <p className={`mt-1 text-sm font-bold ${event.overdue ? "text-red-500" : "text-muted"}`}>最晚拍摄日</p>
                         </div>
                         {event.amount ? <span className="shrink-0 rounded-full bg-white px-3 py-1 text-sm font-black">{money(event.amount)}</span> : null}
                       </article>
@@ -141,61 +141,31 @@ function calendarTone(event: ReturnType<typeof getCalendarEvents>[number]) {
   }
 
   const byLabel: Record<string, { dot: string; panel: string; badge: string }> = {
-    合作建联: {
-      dot: "bg-stone-600",
-      panel: "border-stone-200 bg-[linear-gradient(135deg,#ffffff,#f3f1f8)]",
-      badge: "bg-stone-100 text-stone-700",
-    },
-    收货: {
-      dot: "bg-sky-400",
-      panel: "border-sky-200 bg-[linear-gradient(135deg,#f4fbff,#e2f3ff)]",
-      badge: "bg-sky-100 text-sky-700",
-    },
-    最晚拍摄: {
-      dot: "bg-orange-400",
-      panel: "border-orange-200 bg-[linear-gradient(135deg,#fff9ef,#ffecd5)]",
-      badge: "bg-orange-100 text-orange-700",
+    待拍摄: {
+      dot: "bg-rose-500",
+      panel: "border-rose-200 bg-[linear-gradient(135deg,#fff7f8,#ffe8ee)]",
+      badge: "bg-rose-100 text-rose-700",
     },
     已拍摄: {
-      dot: "bg-lime-500",
-      panel: "border-lime-200 bg-[linear-gradient(135deg,#f7ffef,#e7fbd4)]",
-      badge: "bg-lime-100 text-lime-700",
-    },
-    最晚发布: {
-      dot: "bg-violet-500",
-      panel: "border-violet-200 bg-[linear-gradient(135deg,#fbf7ff,#efddff)]",
-      badge: "bg-violet-100 text-violet-700",
-    },
-    已发布: {
       dot: "bg-blue-500",
       panel: "border-blue-200 bg-[linear-gradient(135deg,#f5fbff,#ddecff)]",
       badge: "bg-blue-100 text-blue-700",
     },
-    预计回款: {
-      dot: "bg-fuchsia-500",
-      panel: "border-fuchsia-200 bg-[linear-gradient(135deg,#fff7fd,#f7ddff)]",
-      badge: "bg-fuchsia-100 text-fuchsia-700",
-    },
-    合作费到账: {
+    已发布: {
       dot: "bg-emerald-500",
       panel: "border-emerald-200 bg-[linear-gradient(135deg,#f4fff8,#dff8eb)]",
       badge: "bg-emerald-100 text-emerald-700",
     },
-    预计返本: {
-      dot: "bg-amber-500",
-      panel: "border-amber-200 bg-[linear-gradient(135deg,#fffdf0,#fff0bd)]",
-      badge: "bg-amber-100 text-amber-700",
-    },
-    本金已返: {
-      dot: "bg-teal-500",
-      panel: "border-teal-200 bg-[linear-gradient(135deg,#f3fffd,#d8f8ef)]",
-      badge: "bg-teal-100 text-teal-700",
+    已完成: {
+      dot: "bg-stone-400",
+      panel: "border-stone-200 bg-[linear-gradient(135deg,#ffffff,#f2f2f4)]",
+      badge: "bg-stone-100 text-stone-600",
     },
   };
 
   return byLabel[event.label] || {
-    dot: taskMeta[event.type].dot,
+    dot: "bg-stone-400",
     panel: "border-stone-200 bg-white/78",
-    badge: taskMeta[event.type].tone,
+    badge: "bg-stone-100 text-stone-600",
   };
 }

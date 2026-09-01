@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Archive,
   ArrowLeft,
   CalendarDays,
   Camera,
@@ -14,11 +13,12 @@ import {
   LinkIcon,
   RotateCcw,
   Send,
+  Trash2,
   WalletCards,
 } from "lucide-react";
 import type { Deal } from "@/lib/types";
 import { demoDeals } from "@/lib/demo-data";
-import { canCompleteDeal, getDealStatus, hasAmount } from "@/lib/deal-status";
+import { getDealStatus, hasAmount } from "@/lib/deal-status";
 import { todayKey } from "@/lib/date-utils";
 import { displayTitle, fullDate, fullDateTime, money } from "@/lib/format";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
@@ -74,6 +74,14 @@ export function DealDetail({ id }: { id: string }) {
       .eq("id", deal.id);
     if (updateError) setError(updateError.message);
     else setDeal(next);
+  }
+
+  async function moveToTrash() {
+    if (!deal) return;
+    const confirmed = window.confirm("确定把这条合作移入垃圾桶吗？30 天后会彻底删除。");
+    if (!confirmed) return;
+    await updateDeal({ deleted_at: new Date().toISOString() });
+    router.push("/deals");
   }
 
   async function submitQuickAction() {
@@ -136,9 +144,6 @@ export function DealDetail({ id }: { id: string }) {
                 ) : null}
               </div>
             </div>
-            <span className="absolute right-4 top-20 flex h-14 w-14 items-center justify-center rounded-full bg-yellow-300/80 text-xl font-black shadow-soft">
-              :)
-            </span>
           </section>
 
           <section className="rounded-[24px] border border-blue-200 bg-[linear-gradient(135deg,#f5fbff,#e7f2ff)] p-4 shadow-soft">
@@ -148,9 +153,7 @@ export function DealDetail({ id }: { id: string }) {
               {!deal.publish_date ? <QuickButton label="已发布" icon={<Send className="h-4 w-4" />} onClick={() => openSheet("publish")} /> : null}
               {hasAmount(deal.base_fee) && !deal.payment_received ? <QuickButton label="合作费已收" icon={<WalletCards className="h-4 w-4" />} onClick={() => openSheet("payment")} /> : null}
               {hasAmount(deal.advance_amount) && !deal.refund_received ? <QuickButton label="本金已返" icon={<RotateCcw className="h-4 w-4" />} onClick={() => openSheet("refund")} /> : null}
-              {!deal.completed && canCompleteDeal(deal) ? <QuickButton label="完成合作" icon={<CheckCircle2 className="h-4 w-4" />} onClick={() => updateDeal({ completed: true })} /> : null}
-              {deal.completed && !deal.archived_at ? <QuickButton label="归档合作" icon={<Archive className="h-4 w-4" />} onClick={() => updateDeal({ archived_at: new Date().toISOString() })} /> : null}
-              {deal.archived_at ? <QuickButton label="恢复合作" icon={<Archive className="h-4 w-4" />} onClick={() => updateDeal({ archived_at: null })} /> : null}
+              {!deal.completed && !deal.archived_at ? <QuickButton label="完成合作" icon={<CheckCircle2 className="h-4 w-4" />} onClick={() => updateDeal({ completed: true, archived_at: new Date().toISOString() })} /> : null}
             </div>
           </section>
 
@@ -159,6 +162,7 @@ export function DealDetail({ id }: { id: string }) {
             <Info label="产品" value={deal.product_name} />
             <Info label="品类" value={deal.product_category} />
             <Info label="平台" value={(deal.platforms?.length ? deal.platforms : deal.platform ? [deal.platform] : []).join("、")} />
+            <Info label="合作形式" value={deal.collaboration_type} />
             <Info label="合作日期" value={fullDate(deal.cooperation_date || deal.created_at)} />
             <Info label="商品链接" value={deal.product_url} link />
           </DetailSection>
@@ -168,6 +172,7 @@ export function DealDetail({ id }: { id: string }) {
             <Info label="合作费" value={money(deal.base_fee)} highlight />
             <Info label="佣金" value={deal.commission} highlight />
             <Info label="垫付金额" value={money(deal.advance_amount)} highlight />
+            <Info label="是否垫付" value={deal.advance_required ? "需要垫付" : "不垫付"} />
             <Info label="合作费到账" value={deal.payment_received ? fullDate(deal.payment_received_date) || "已到账" : null} />
             <Info label="本金返还" value={deal.refund_received ? fullDate(deal.refund_received_date) || "已返还" : null} />
           </DetailSection>
@@ -187,6 +192,15 @@ export function DealDetail({ id }: { id: string }) {
             <Info label="发布链接" value={deal.publish_url} link />
             <Info label="备注" value={deal.notes} />
           </DetailSection>
+
+          <button
+            type="button"
+            onClick={moveToTrash}
+            className="flex w-full items-center justify-center gap-2 rounded-[20px] border border-red-100 bg-white/78 px-5 py-4 text-base font-black text-red-500"
+          >
+            <Trash2 className="h-5 w-5" />
+            移入垃圾桶
+          </button>
         </div>
       ) : null}
 

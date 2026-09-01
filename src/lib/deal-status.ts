@@ -2,10 +2,8 @@ import type { CalendarEvent, Deal, DealStatus, TaskItem, TaskType } from "./type
 import { daysBetween, isPast, isSameDay, isWithinNextDays, todayKey } from "./date-utils";
 
 export const statusMeta: Record<DealStatus, { tone: string; dot: string }> = {
-  待处理: { tone: "bg-stone-100 text-stone-600", dot: "bg-stone-400" },
-  待拍摄: { tone: "bg-pink-100 text-pink-600", dot: "bg-pink-500" },
-  待发布: { tone: "bg-blue-100 text-blue-600", dot: "bg-blue-500" },
-  待收款: { tone: "bg-amber-100 text-amber-700", dot: "bg-amber-500" },
+  待发布: { tone: "bg-violet-100 text-violet-700", dot: "bg-violet-500" },
+  已发布: { tone: "bg-blue-100 text-blue-700", dot: "bg-blue-500" },
   已完成: { tone: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-500" },
 };
 
@@ -22,23 +20,13 @@ export function hasAmount(value: number | null | undefined) {
 }
 
 export function getDealStatus(deal: Deal): DealStatus {
-  if (deal.completed) return "已完成";
-  if (
-    deal.publish_date &&
-    ((hasAmount(deal.base_fee) && !deal.payment_received) ||
-      (hasAmount(deal.advance_amount) && !deal.refund_received))
-  ) {
-    return "待收款";
-  }
-  if (deal.shoot_date && !deal.publish_date) return "待发布";
-  if (!deal.shoot_date && !deal.completed) return "待拍摄";
-  return "待处理";
+  if (deal.completed || deal.archived_at) return "已完成";
+  if (deal.publish_date) return "已发布";
+  return "待发布";
 }
 
 export function canCompleteDeal(deal: Deal) {
-  const feeDone = !hasAmount(deal.base_fee) || deal.payment_received;
-  const refundDone = !hasAmount(deal.advance_amount) || deal.refund_received;
-  return Boolean(deal.publish_date && feeDone && refundDone);
+  return Boolean(deal.publish_date || deal.payment_received || deal.refund_received);
 }
 
 function task(
@@ -66,9 +54,7 @@ function task(
 
 export function getDealTasks(deal: Deal) {
   return [
-    task(deal, "shoot", deal.shoot_deadline, Boolean(deal.shoot_date)),
     task(deal, "publish", deal.publish_deadline, Boolean(deal.publish_date)),
-    task(deal, "payment", hasAmount(deal.base_fee) ? deal.expected_payment_date : null, deal.payment_received, deal.base_fee),
     task(deal, "refund", hasAmount(deal.advance_amount) ? deal.expected_refund_date : null, deal.refund_received, deal.advance_amount),
   ].filter(Boolean) as TaskItem[];
 }
@@ -91,33 +77,15 @@ export function getCalendarEvents(deals: Deal[]): CalendarEvent[] {
   return deals
     .flatMap((deal) => {
       const title = `${deal.brand || "未命名品牌"} ${deal.product_name || ""}`.trim();
+      const label = deal.completed || deal.archived_at
+        ? "已完成"
+        : deal.publish_date
+          ? "已发布"
+          : deal.shoot_date
+            ? "已拍摄"
+            : "待拍摄";
       return [
-        calendarEvent(deal, "cooperation", "合作建联", deal.cooperation_date || deal.created_at?.slice(0, 10) || null, true, title),
-        calendarEvent(deal, "shoot", "收货", deal.received_date, true, title),
-        calendarEvent(deal, "shoot", "最晚拍摄", deal.shoot_deadline, Boolean(deal.shoot_date), title),
-        calendarEvent(deal, "shoot", "已拍摄", deal.shoot_date, true, title),
-        calendarEvent(deal, "publish", "最晚发布", deal.publish_deadline, Boolean(deal.publish_date), title),
-        calendarEvent(deal, "publish", "已发布", deal.publish_date, true, title),
-        calendarEvent(
-          deal,
-          "payment",
-          "预计回款",
-          hasAmount(deal.base_fee) ? deal.expected_payment_date : null,
-          deal.payment_received,
-          title,
-          deal.base_fee,
-        ),
-        calendarEvent(deal, "payment", "合作费到账", deal.payment_received_date, true, title, deal.base_fee),
-        calendarEvent(
-          deal,
-          "refund",
-          "预计返本",
-          hasAmount(deal.advance_amount) ? deal.expected_refund_date : null,
-          deal.refund_received,
-          title,
-          deal.advance_amount,
-        ),
-        calendarEvent(deal, "refund", "本金已返", deal.refund_received_date, true, title, deal.advance_amount),
+        calendarEvent(deal, "shoot", label, deal.shoot_deadline, Boolean(deal.completed || deal.archived_at || deal.publish_date || deal.shoot_date), title),
       ];
     })
     .filter((event): event is CalendarEvent => Boolean(event))

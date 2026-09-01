@@ -48,7 +48,7 @@ export function ArchivedDeals() {
         <Link href="/deals" className="icon-button" aria-label="返回">
           <ArrowLeft className="h-5 w-5" />
         </Link>
-        <h1 className="text-2xl font-black">已归档合作</h1>
+        <h1 className="text-2xl font-black">已完成合作</h1>
         <span className="h-11 w-11" />
       </div>
 
@@ -80,7 +80,7 @@ export function ArchivedDeals() {
 
       <section className="mt-5 space-y-5">
         {loading ? (
-          <p className="card p-6 text-center text-sm font-bold text-muted">正在读取归档...</p>
+          <p className="card p-6 text-center text-sm font-bold text-muted">正在读取已完成合作...</p>
         ) : groups.length ? (
           groups.map((group) => (
             <div key={group.month}>
@@ -100,8 +100,8 @@ export function ArchivedDeals() {
           ))
         ) : (
           <div className="card p-8 text-center">
-            <h2 className="text-xl font-black">{deals.length ? "没有匹配结果" : "暂无归档"}</h2>
-            <p className="mt-2 text-sm font-bold text-muted">{deals.length ? "换个关键词或品类试试。" : "完成后的合作可以在详情页归档。"}</p>
+            <h2 className="text-xl font-black">{deals.length ? "没有匹配结果" : "暂无已完成合作"}</h2>
+            <p className="mt-2 text-sm font-bold text-muted">{deals.length ? "换个关键词或品类试试。" : "点亮完成合作后，会自动收进这里。"}</p>
           </div>
         )}
       </section>
@@ -118,7 +118,7 @@ function timelineValue(deal: Deal) {
 }
 
 function timelineLabel(deal: Deal) {
-  const label = deal.publish_date ? "发布时间" : deal.archived_at ? "归档时间" : "创建时间";
+  const label = deal.publish_date ? "发布时间" : deal.archived_at ? "完成时间" : "创建时间";
   return `${label} ${fullDate(timelineDate(deal))}`;
 }
 

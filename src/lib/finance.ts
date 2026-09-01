@@ -1,50 +1,69 @@
 import type { Deal } from "./types";
-import { isPast, todayKey } from "./date-utils";
 import { hasAmount } from "./deal-status";
+
+export type FinanceRange = "currentMonth" | "lastMonth" | "quarter" | "year" | "all" | {
+  start?: string;
+  end?: string;
+};
 
 export type CategoryFinance = {
   category: string;
   deals: number;
-  received: number;
-  pendingPayment: number;
-  pendingRefund: number;
+  totalCommission: number;
+  pendingCommission: number;
+  totalPrincipal: number;
+  pendingPrincipal: number;
 };
 
-export function getFinanceSummary(deals: Deal[]) {
+export function parseMoneyText(value?: string | null) {
+  if (!value || value.includes("%")) return 0;
+  const normalized = value.replace(/,/g, "").match(/\d+(\.\d+)?/);
+  return normalized ? Number(normalized[0]) : 0;
+}
+
+export function commissionAmount(deal: Deal) {
+  return hasAmount(deal.base_fee) ? deal.base_fee || 0 : parseMoneyText(deal.commission);
+}
+
+function financeDate(deal: Deal) {
+  return deal.publish_deadline || deal.shoot_deadline || deal.cooperation_date || deal.created_at?.slice(0, 10) || "";
+}
+
+export function filterDealsByFinanceRange(deals: Deal[], range: FinanceRange) {
+  if (range === "all") return deals;
   const now = new Date();
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const today = todayKey();
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  let start = currentMonthStart.getTime();
+  let end = currentMonthEnd.getTime();
 
-  return deals.reduce(
-    (summary, deal) => {
-      if (hasAmount(deal.base_fee) && deal.payment_received) {
-        const receivedMonth = (deal.payment_received_date || deal.publish_date || "").slice(0, 7);
-        if (receivedMonth === currentMonth) summary.monthReceived += deal.base_fee || 0;
-      }
+  if (range === "lastMonth") {
+    start = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+    end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59).getTime();
+  } else if (range === "quarter") {
+    start = new Date(now.getFullYear(), now.getMonth() - 2, 1).getTime();
+  } else if (range === "year") {
+    start = new Date(now.getFullYear(), now.getMonth() - 11, 1).getTime();
+  } else if (typeof range === "object") {
+    start = range.start ? new Date(`${range.start}T00:00:00`).getTime() : Number.NEGATIVE_INFINITY;
+    end = range.end ? new Date(`${range.end}T23:59:59`).getTime() : Number.POSITIVE_INFINITY;
+  }
 
-      if (hasAmount(deal.base_fee) && !deal.payment_received) {
-        summary.pendingPayment += deal.base_fee || 0;
-        if (deal.expected_payment_date && isPast(deal.expected_payment_date, today)) {
-          summary.overdueAmount += deal.base_fee || 0;
-        }
-      }
+  return deals.filter((deal) => {
+    const date = new Date(`${financeDate(deal)}T00:00:00`).getTime();
+    return !Number.isNaN(date) && date >= start && date <= end;
+  });
+}
 
-      if (hasAmount(deal.advance_amount) && !deal.refund_received) {
-        summary.pendingRefund += deal.advance_amount || 0;
-        if (deal.expected_refund_date && isPast(deal.expected_refund_date, today)) {
-          summary.overdueAmount += deal.advance_amount || 0;
-        }
-      }
-
-      return summary;
-    },
-    {
-      monthReceived: 0,
-      pendingPayment: 0,
-      pendingRefund: 0,
-      overdueAmount: 0,
-    },
-  );
+export function getFinanceSummary(deals: Deal[], range: FinanceRange = "currentMonth") {
+  const scopedDeals = filterDealsByFinanceRange(deals, range);
+  const principalDeals = deals;
+  return {
+    totalCommission: scopedDeals.reduce((total, deal) => total + commissionAmount(deal), 0),
+    pendingCommission: scopedDeals.reduce((total, deal) => total + (!deal.payment_received ? commissionAmount(deal) : 0), 0),
+    totalPrincipal: principalDeals.reduce((total, deal) => total + (deal.advance_amount || 0), 0),
+    pendingPrincipal: principalDeals.reduce((total, deal) => total + (!deal.refund_received ? deal.advance_amount || 0 : 0), 0),
+  };
 }
 
 export function getCategoryFinance(deals: Deal[]) {
@@ -55,21 +74,23 @@ export function getCategoryFinance(deals: Deal[]) {
     const current = map.get(category) || {
       category,
       deals: 0,
-      received: 0,
-      pendingPayment: 0,
-      pendingRefund: 0,
+      totalCommission: 0,
+      pendingCommission: 0,
+      totalPrincipal: 0,
+      pendingPrincipal: 0,
     };
 
     current.deals += 1;
-    if (hasAmount(deal.base_fee) && deal.payment_received) current.received += deal.base_fee || 0;
-    if (hasAmount(deal.base_fee) && !deal.payment_received) current.pendingPayment += deal.base_fee || 0;
-    if (hasAmount(deal.advance_amount) && !deal.refund_received) current.pendingRefund += deal.advance_amount || 0;
+    current.totalCommission += commissionAmount(deal);
+    if (!deal.payment_received) current.pendingCommission += commissionAmount(deal);
+    current.totalPrincipal += deal.advance_amount || 0;
+    if (!deal.refund_received) current.pendingPrincipal += deal.advance_amount || 0;
     map.set(category, current);
   }
 
   return Array.from(map.values()).sort((a, b) => {
-    const amountA = a.received + a.pendingPayment + a.pendingRefund;
-    const amountB = b.received + b.pendingPayment + b.pendingRefund;
+    const amountA = a.totalCommission + a.totalPrincipal;
+    const amountB = b.totalCommission + b.totalPrincipal;
     return amountB - amountA || b.deals - a.deals;
   });
 }

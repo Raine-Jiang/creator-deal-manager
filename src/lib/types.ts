@@ -4,17 +4,13 @@ export const platformOptions: PlatformOption[] = ["小红书", "抖音", "其他
 export type ProductCategory =
   | "上衣"
   | "裤子"
-  | "鞋子"
-  | "卫衣"
+  | "套装"
   | "裙子"
-  | "包包"
-  | "帽子"
+  | "鞋子"
   | "配饰"
-  | "运动套装"
-  | "美妆个护"
-  | "食品饮品"
   | "其他"
   | "";
+export type CollaborationType = "送拍" | "寄拍" | "";
 
 export type Deal = {
   id: string;
@@ -28,6 +24,8 @@ export type Deal = {
   product_image_url: string | null;
   platform: Platform | null;
   platforms: PlatformOption[] | null;
+  advance_required: boolean | null;
+  collaboration_type: CollaborationType | null;
   product_price: number | null;
   base_fee: number | null;
   commission: string | null;
@@ -48,6 +46,7 @@ export type Deal = {
   notes: string | null;
   completed: boolean;
   archived_at: string | null;
+  deleted_at: string | null;
 };
 
 export type DealFormValues = Omit<
@@ -64,6 +63,8 @@ export const emptyDealValues: DealFormValues = {
   cooperation_date: "",
   platform: "",
   platforms: [],
+  advance_required: false,
+  collaboration_type: "",
   product_price: null,
   base_fee: null,
   commission: "",
@@ -85,9 +86,10 @@ export const emptyDealValues: DealFormValues = {
   product_image_url: null,
   completed: false,
   archived_at: null,
+  deleted_at: null,
 };
 
-export type DealStatus = "待处理" | "待拍摄" | "待发布" | "待收款" | "已完成";
+export type DealStatus = "待发布" | "已发布" | "已完成";
 
 export type TaskType = "cooperation" | "shoot" | "publish" | "payment" | "refund";
 
