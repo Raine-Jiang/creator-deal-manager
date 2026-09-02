@@ -144,6 +144,12 @@ Rules:
   - Finance page owns range statistics and range daily detail.
   - Finance page allows editing and deleting a single daily earning record when the user enters a wrong amount.
   - Calendar page owns per-day visibility.
+- Profile:
+  - User name and avatar are stored in Supabase Auth `user_metadata`.
+  - Avatar uploads are compressed to WebP and stored in the existing user-scoped product image bucket under `user_id/profile/avatar.webp`.
+- Date display:
+  - Date-only values display as Chinese year/month/day.
+  - Timestamp values display as Chinese year/month/day plus hour/minute/second.
 - Excel import:
   - Preserve useful unmatched columns by appending them to notes as `Header：Value`.
   - Embedded images are best-effort matched to row number, compressed to WebP and uploaded to Supabase Storage.

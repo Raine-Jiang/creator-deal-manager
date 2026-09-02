@@ -27,7 +27,7 @@ import {
   type Database,
 } from "@/lib/supabase";
 import { todayKey } from "@/lib/date-utils";
-import { shortDate } from "@/lib/format";
+import { fullDate } from "@/lib/format";
 import { compressImageToWebp } from "@/lib/images";
 import { AppShell } from "./AppShell";
 import { ProductMark } from "./ProductMark";
@@ -538,10 +538,10 @@ function DateInput({
     <label className="form-row">
       <span>{label}</span>
       <span className="relative ml-auto flex min-w-0 flex-1 justify-end">
-        <span className={`pointer-events-none flex h-10 min-w-[118px] items-center justify-center rounded-[14px] border px-3 pr-9 text-sm font-black ${
+        <span className={`pointer-events-none flex h-10 min-w-[148px] items-center justify-center rounded-[14px] border px-3 pr-9 text-sm font-black max-[390px]:min-w-[138px] max-[390px]:text-xs ${
           value ? "border-black/[0.05] bg-white/78 text-ink" : "border-black/[0.04] bg-white/55 text-muted"
         }`}>
-          {value ? shortDate(value) : "选择日期"}
+          {value ? fullDate(value) : "选择日期"}
         </span>
         <CalendarDays className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink" />
         <input

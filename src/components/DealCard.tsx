@@ -26,7 +26,7 @@ export function DealCard({ deal }: { deal: Deal }) {
         <ProductMark imageUrl={deal.product_image_url} label={deal.product_name} />
         <div className="min-w-0 flex-1 py-1">
           <div className="flex min-w-0 items-start justify-between gap-2">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <h2 className="truncate text-lg font-black leading-tight">
                 {displayTitle(deal.brand, deal.product_name)}
               </h2>

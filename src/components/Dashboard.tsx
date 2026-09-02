@@ -1,11 +1,12 @@
 "use client";
 
-import type { FormEvent, ReactNode } from "react";
+import type { ChangeEvent, FormEvent, ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Archive,
+  Camera,
   CheckCircle2,
   ChevronRight,
   CircleDollarSign,
@@ -24,8 +25,9 @@ import type { User } from "@supabase/supabase-js";
 import { daysBetween, isWithinNextDays, todayKey } from "@/lib/date-utils";
 import { getDealStatus, hasAmount } from "@/lib/deal-status";
 import { commissionAmount, getFinanceSummary } from "@/lib/finance";
-import { fullDate, money, shortDate } from "@/lib/format";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { fullDate, fullDateTime, money, shortDate } from "@/lib/format";
+import { compressImageToWebp } from "@/lib/images";
+import { isSupabaseConfigured, PRODUCT_IMAGE_BUCKET, supabase } from "@/lib/supabase";
 import type { Deal } from "@/lib/types";
 import { useDeals } from "@/lib/use-deals";
 import { AppShell } from "./AppShell";
@@ -48,8 +50,11 @@ export function Dashboard() {
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [profileName, setProfileName] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState("");
   const [profileMessage, setProfileMessage] = useState("");
   const [profileError, setProfileError] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
   const activeDeals = deals.filter((item) => !item.completed && !item.archived_at);
   const completedDeals = deals.filter((item) => item.completed || item.archived_at);
@@ -58,12 +63,16 @@ export function Dashboard() {
   const finance = getFinanceSummary(deals, "all");
   const pendingCommissionDeals = deals.filter((deal) => !deal.payment_received && commissionAmount(deal) > 0).length;
   const pendingPrincipalDeals = deals.filter((deal) => !deal.refund_received && hasAmount(deal.advance_amount)).length;
+  const displayName = profileName.trim() || user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Raine";
 
   useEffect(() => {
     if (!supabase) return;
     async function loadUser() {
       const { data } = await supabase!.auth.getSession();
-      setUser(data.session?.user || null);
+      const currentUser = data.session?.user || null;
+      setUser(currentUser);
+      setProfileName(currentUser?.user_metadata?.full_name || "");
+      setAvatarUrl(currentUser?.user_metadata?.avatar_url || "");
     }
     loadUser();
   }, []);
@@ -112,6 +121,68 @@ export function Dashboard() {
     setProfileMessage("密码已更新，下次登录请使用新密码。");
   }
 
+  async function updateProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setProfileMessage("");
+    setProfileError(false);
+
+    if (!supabase) {
+      setProfileError(true);
+      setProfileMessage("当前是演示模式，配置 Supabase 后才能修改资料。");
+      return;
+    }
+
+    setProfileSaving(true);
+    const { data, error: updateError } = await supabase.auth.updateUser({
+      data: {
+        full_name: profileName.trim() || null,
+        avatar_url: avatarUrl || null,
+      },
+    });
+    setProfileSaving(false);
+
+    if (updateError) {
+      setProfileError(true);
+      setProfileMessage(updateError.message);
+      return;
+    }
+    setUser(data.user);
+    setProfileName(data.user.user_metadata?.full_name || "");
+    setAvatarUrl(data.user.user_metadata?.avatar_url || "");
+    setProfileMessage("个人资料已更新。");
+  }
+
+  async function uploadAvatar(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !supabase) return;
+
+    setProfileSaving(true);
+    setProfileMessage("");
+    setProfileError(false);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData.session?.user.id;
+      if (!userId) throw new Error("请先登录后再上传头像。");
+
+      const compressed = await compressImageToWebp(file);
+      const path = `${userId}/profile/avatar.webp`;
+      const { error: uploadError } = await supabase.storage
+        .from(PRODUCT_IMAGE_BUCKET)
+        .upload(path, compressed, { contentType: compressed.type, upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from(PRODUCT_IMAGE_BUCKET).getPublicUrl(path);
+      setAvatarUrl(`${data.publicUrl}?v=${Date.now()}`);
+      setProfileMessage("头像已上传，点击保存资料后生效。");
+    } catch (avatarError) {
+      setProfileError(true);
+      setProfileMessage(avatarError instanceof Error ? avatarError.message : "头像上传失败。");
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
   function exportDeals() {
     const scopedDeals = filterDealsForExport(deals, exportBasis, exportRange, exportStart, exportEnd);
     const columns = ["状态", "品牌", "产品", "品类", "合作形式", "是否垫付", "本金", "佣金", "接单日期", "最晚发布", "已收货", "已发布", "返本情况", "返佣情况", "完成时间", "备注"];
@@ -130,7 +201,7 @@ export function Dashboard() {
       deal.publish_date ? "已发布" : "",
       deal.refund_received ? "已返本" : "",
       deal.payment_received ? "已返佣" : "",
-      deal.archived_at || "",
+      fullDateTime(deal.archived_at) || "",
       deal.notes || "",
     ]);
     const table = [columns, ...rows]
@@ -153,10 +224,10 @@ export function Dashboard() {
     <AppShell>
       <header className="flex items-start justify-between gap-4 pt-2">
         <button type="button" onClick={() => setProfileOpen(true)} className="flex min-w-0 items-center gap-3 rounded-2xl text-left" aria-label="打开我的">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#eadcff,#ffe3ef)] text-lg font-black">R</div>
+          <AvatarImage avatarUrl={avatarUrl || user?.user_metadata?.avatar_url} name={displayName} size="sm" />
           <div className="min-w-0">
             <p className="text-sm font-bold text-muted">Welcome back,</p>
-            <h1 className="truncate text-2xl font-black leading-tight">Raine</h1>
+            <h1 className="truncate text-2xl font-black leading-tight">{displayName}</h1>
           </div>
         </button>
         <Link href="/deals/new" className="primary-icon-button !h-11 !w-11" aria-label="新建合作">
@@ -207,7 +278,7 @@ export function Dashboard() {
           <div className="max-h-[86svh] w-full max-w-[430px] overflow-y-auto rounded-[30px] border border-black/[0.06] bg-white p-5" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#eadcff,#ffe3ef)] text-lg font-black">R</div>
+                <AvatarImage avatarUrl={avatarUrl} name={displayName} size="sm" />
                 <div className="min-w-0">
                   <h2 className="text-xl font-black">我的</h2>
                   <p className="truncate text-sm font-bold text-muted">{user?.email || "演示账号"}</p>
@@ -225,6 +296,28 @@ export function Dashboard() {
             </div>
 
             {profileMessage ? <p className={`mt-4 rounded-[18px] p-3 text-sm font-bold ${profileError ? "bg-red-50 text-red-500" : "bg-emerald-50 text-emerald-600"}`}>{profileMessage}</p> : null}
+
+            <ProfileGroup title="个人资料">
+              <form onSubmit={updateProfile} className="space-y-3 rounded-[20px] bg-warm/55 p-3">
+                <div className="flex items-center gap-3">
+                  <AvatarImage avatarUrl={avatarUrl} name={displayName} size="lg" />
+                  <label className="flex min-h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-[16px] bg-white px-4 text-sm font-black text-muted">
+                    <Camera className="h-4 w-4" />
+                    更换头像
+                    <input type="file" accept="image/*" className="sr-only" onChange={uploadAvatar} disabled={profileSaving} />
+                  </label>
+                </div>
+                <input
+                  value={profileName}
+                  onChange={(event) => setProfileName(event.target.value)}
+                  placeholder="你的名字"
+                  className="w-full rounded-[16px] bg-white px-4 py-3 text-sm font-bold outline-none"
+                />
+                <button className="primary-button w-full justify-center py-3 text-sm" disabled={profileSaving || !isSupabaseConfigured}>
+                  {profileSaving ? "保存中..." : "保存资料"}
+                </button>
+              </form>
+            </ProfileGroup>
 
             <ProfileGroup title="账号安全">
               <ProfileAction
@@ -295,6 +388,24 @@ export function Dashboard() {
 
       <DealImporter open={importOpen} onClose={() => setImportOpen(false)} onImported={reload} />
     </AppShell>
+  );
+}
+
+function AvatarImage({ avatarUrl, name, size }: { avatarUrl?: string | null; name: string; size: "sm" | "lg" }) {
+  const className = size === "lg" ? "h-16 w-16 text-xl" : "h-12 w-12 text-lg";
+  const initial = name.trim().slice(0, 1).toUpperCase() || "R";
+
+  if (avatarUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={avatarUrl} alt={name} className={`${className} shrink-0 rounded-full object-cover`} />
+    );
+  }
+
+  return (
+    <div className={`${className} flex shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#eadcff,#ffe3ef)] font-black`}>
+      {initial}
+    </div>
   );
 }
 

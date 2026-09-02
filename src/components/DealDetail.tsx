@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import type { Deal } from "@/lib/types";
 import { demoDeals } from "@/lib/demo-data";
-import { getDealStatus, hasAmount } from "@/lib/deal-status";
+import { getDealStatus } from "@/lib/deal-status";
 import { todayKey } from "@/lib/date-utils";
 import { displayTitle, fullDate, fullDateTime, money } from "@/lib/format";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
@@ -100,7 +100,11 @@ export function DealDetail({ id }: { id: string }) {
   }
 
   function openSheet(type: ActionType) {
-    setActionDate(todayKey());
+    const savedDate =
+      type === "publish" ? deal?.publish_date
+        : type === "payment" ? deal?.payment_received_date
+          : deal?.refund_received_date;
+    setActionDate(savedDate || todayKey());
     setPublishUrl(deal?.publish_url || "");
     setSheet(type);
   }
@@ -131,8 +135,8 @@ export function DealDetail({ id }: { id: string }) {
             <div className="flex items-center gap-4">
               <ProductMark imageUrl={deal.product_image_url} label={deal.product_name} size="lg" />
               <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-2">
-                  <h2 className="min-w-0 text-2xl font-black leading-tight">{displayTitle(deal.brand, deal.product_name)}</h2>
+                <div className="flex min-w-0 items-start justify-between gap-2">
+                  <h2 className="line-clamp-2 min-w-0 flex-1 break-words text-[22px] font-black leading-tight">{displayTitle(deal.brand, deal.product_name)}</h2>
                   <StatusChip status={getDealStatus(deal)} />
                 </div>
                 {(deal.platforms?.length || deal.platform || deal.product_category) ? (
@@ -150,10 +154,15 @@ export function DealDetail({ id }: { id: string }) {
           <section className="rounded-[24px] border border-blue-200 bg-[linear-gradient(135deg,#f5fbff,#e7f2ff)] p-4 shadow-soft">
             <h3 className="mb-3 text-lg font-black">快捷记录</h3>
             <div className="grid grid-cols-2 gap-2.5">
-              {!deal.publish_date ? <QuickButton label="已发布" icon={<Send className="h-4 w-4" />} onClick={() => openSheet("publish")} /> : null}
-              {hasAmount(deal.base_fee) && !deal.payment_received ? <QuickButton label="合作费已收" icon={<WalletCards className="h-4 w-4" />} onClick={() => openSheet("payment")} /> : null}
-              {hasAmount(deal.advance_amount) && !deal.refund_received ? <QuickButton label="本金已返" icon={<RotateCcw className="h-4 w-4" />} onClick={() => openSheet("refund")} /> : null}
-              {!deal.completed && !deal.archived_at ? <QuickButton label="完成合作" icon={<CheckCircle2 className="h-4 w-4" />} onClick={() => updateDeal({ completed: true, archived_at: new Date().toISOString() })} /> : null}
+              <QuickButton label="已发布" active={Boolean(deal.publish_date)} icon={<Send className="h-4 w-4" />} onClick={() => openSheet("publish")} />
+              <QuickButton label="合作费已收" active={deal.payment_received} icon={<WalletCards className="h-4 w-4" />} onClick={() => openSheet("payment")} />
+              <QuickButton label="本金已返" active={deal.refund_received} icon={<RotateCcw className="h-4 w-4" />} onClick={() => openSheet("refund")} />
+              <QuickButton
+                label="完成合作"
+                active={Boolean(deal.completed || deal.archived_at)}
+                icon={<CheckCircle2 className="h-4 w-4" />}
+                onClick={() => updateDeal(deal.completed || deal.archived_at ? { completed: false, archived_at: null } : { completed: true, archived_at: new Date().toISOString() })}
+              />
             </div>
           </section>
 
@@ -228,9 +237,15 @@ function sheetTitle(type: ActionType) {
   return { publish: "标记已发布", payment: "合作费已收", refund: "本金已返" }[type];
 }
 
-function QuickButton({ label, icon, onClick }: { label: string; icon: ReactNode; onClick: () => void }) {
+function QuickButton({ label, active, icon, onClick }: { label: string; active: boolean; icon: ReactNode; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="flex min-h-12 items-center justify-center gap-2 rounded-[18px] bg-warm px-3 text-sm font-black text-ink">
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex min-h-12 items-center justify-center gap-2 rounded-[18px] border px-3 text-sm font-black ${
+        active ? "border-emerald-200 bg-emerald-100 text-emerald-700" : "border-black/[0.04] bg-warm text-ink"
+      }`}
+    >
       {icon}
       {label}
     </button>
