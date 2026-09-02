@@ -2,12 +2,11 @@
 
 import type { FormEvent, ReactNode } from "react";
 import { useMemo, useState } from "react";
-import { CircleDollarSign, PencilLine, RotateCcw, Trash2, WalletCards, X } from "lucide-react";
+import { CircleDollarSign, PencilLine, RotateCcw, Trash2, WalletCards } from "lucide-react";
 import type { FinanceRange } from "@/lib/finance";
 import { filterDealsByFinanceRange, getCategoryFinance, getFinanceDateBounds, getFinanceSummary, isDateInBounds } from "@/lib/finance";
 import { fullDate, money } from "@/lib/format";
 import { todayKey } from "@/lib/date-utils";
-import type { DailyEarning } from "@/lib/types";
 import { useDeals } from "@/lib/use-deals";
 import { useDailyEarnings } from "@/lib/use-daily-earnings";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
@@ -32,7 +31,6 @@ export function FinancePage() {
   const [earningNotes, setEarningNotes] = useState("");
   const [earningMessage, setEarningMessage] = useState("");
   const [earningSaving, setEarningSaving] = useState(false);
-  const [editingEarningId, setEditingEarningId] = useState<string | null>(null);
   const { deals, loading, error } = useDeals("all");
   const { earnings, loading: earningsLoading, error: earningsError, reload: reloadEarnings } = useDailyEarnings();
   const activeRange: FinanceRange = useMemo(
@@ -41,13 +39,16 @@ export function FinancePage() {
   );
   const summary = getFinanceSummary(deals, activeRange);
   const categories = getCategoryFinance(filterDealsByFinanceRange(deals, activeRange));
+  const selectedEarning = useMemo(
+    () => earnings.find((item) => item.earning_date === earningDate) || null,
+    [earningDate, earnings],
+  );
   const dailyEarningStats = useMemo(() => {
     const { start, end } = getFinanceDateBounds(activeRange);
     const scoped = earnings.filter((item) => isDateInBounds(item.earning_date, start, end));
     return {
       total: scoped.reduce((sum, item) => sum + Number(item.amount || 0), 0),
       count: scoped.length,
-      days: scoped.slice(0, 60),
     };
   }, [activeRange, earnings]);
 
@@ -74,7 +75,7 @@ export function FinancePage() {
       return;
     }
 
-    const { error: saveError } = editingEarningId
+    const { error: saveError } = selectedEarning
       ? await supabase
         .from("daily_earnings")
         .update({
@@ -82,7 +83,7 @@ export function FinancePage() {
           amount,
           notes: earningNotes.trim() || null,
         })
-        .eq("id", editingEarningId)
+        .eq("id", selectedEarning.id)
       : await supabase
         .from("daily_earnings")
         .upsert({
@@ -97,42 +98,32 @@ export function FinancePage() {
       setEarningMessage(saveError.message);
       return;
     }
-    setEarningAmount("");
-    setEarningNotes("");
-    setEditingEarningId(null);
-    setEarningMessage(editingEarningId ? "已更新这条收益。" : "已保存当天收益。");
+    setEarningMessage(selectedEarning ? "已更新当天收益。" : "已保存当天收益。");
     reloadEarnings();
   }
 
-  function startEditDailyEarning(item: DailyEarning) {
-    setEditingEarningId(item.id);
-    setEarningDate(item.earning_date);
-    setEarningAmount(String(item.amount || ""));
-    setEarningNotes(item.notes || "");
-    setEarningMessage("正在编辑这条收益，修改后点击保存。");
+  function selectEarningDate(value: string) {
+    const existing = earnings.find((item) => item.earning_date === value);
+    setEarningDate(value);
+    setEarningAmount(existing ? String(existing.amount || "") : "");
+    setEarningNotes(existing?.notes || "");
+    setEarningMessage(existing ? `正在编辑 ${fullDate(existing.earning_date)} 的收益。` : "");
   }
 
-  function cancelEditDailyEarning() {
-    setEditingEarningId(null);
-    setEarningDate(todayKey());
-    setEarningAmount("");
-    setEarningNotes("");
-    setEarningMessage("");
-  }
-
-  async function deleteDailyEarning(item: DailyEarning) {
-    if (!supabase) return;
-    const confirmed = window.confirm(`确定删除 ${fullDate(item.earning_date)} 的收益记录吗？`);
+  async function deleteDailyEarning() {
+    if (!supabase || !selectedEarning) return;
+    const confirmed = window.confirm(`确定删除 ${fullDate(selectedEarning.earning_date)} 的收益记录吗？`);
     if (!confirmed) return;
 
     setEarningSaving(true);
-    const { error: deleteError } = await supabase.from("daily_earnings").delete().eq("id", item.id);
+    const { error: deleteError } = await supabase.from("daily_earnings").delete().eq("id", selectedEarning.id);
     setEarningSaving(false);
     if (deleteError) {
       setEarningMessage(deleteError.message);
       return;
     }
-    if (editingEarningId === item.id) cancelEditDailyEarning();
+    setEarningAmount("");
+    setEarningNotes("");
     setEarningMessage("已删除这条收益。");
     reloadEarnings();
   }
@@ -183,7 +174,7 @@ export function FinancePage() {
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-xl font-black">每日收益</h2>
-            <p className="mt-1 text-xs font-bold text-muted">抖音等平台的创作者收益，按日期手动记录。</p>
+            <p className="mt-1 text-xs font-bold text-muted">选择日期后直接记录或修改当天收益。</p>
           </div>
           <div className="shrink-0 text-right">
             <p className="text-xs font-black text-muted">{dailyEarningStats.count} 天</p>
@@ -193,7 +184,7 @@ export function FinancePage() {
 
         <form onSubmit={saveDailyEarning} className="mt-4 grid gap-2">
           <div className="grid grid-cols-[1fr_1.1fr] gap-2">
-            <DateField label="日期" value={earningDate} onChange={setEarningDate} />
+            <DateField label="日期" value={earningDate} onChange={selectEarningDate} />
             <label className="min-w-0 rounded-[16px] bg-warm/70 px-3 py-2">
               <span className="text-xs font-black text-muted">收益金额</span>
               <input
@@ -214,39 +205,17 @@ export function FinancePage() {
           <div className="flex gap-2">
             <button type="submit" disabled={earningSaving || !isSupabaseConfigured} className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-[16px] bg-black px-4 text-sm font-black text-white disabled:opacity-50">
               <PencilLine className="h-4 w-4" />
-              {earningSaving ? "保存中..." : editingEarningId ? "保存修改" : "记录当天收益"}
+              {earningSaving ? "保存中..." : selectedEarning ? "保存修改" : "记录当天收益"}
             </button>
-            {editingEarningId ? (
-              <button type="button" onClick={cancelEditDailyEarning} className="flex min-h-11 w-12 items-center justify-center rounded-[16px] bg-warm text-muted">
-                <X className="h-4 w-4" />
+            {selectedEarning ? (
+              <button type="button" onClick={deleteDailyEarning} disabled={earningSaving} className="flex min-h-11 w-12 items-center justify-center rounded-[16px] bg-rose-50 text-rose-500 disabled:opacity-50" aria-label="删除当天收益">
+                <Trash2 className="h-4 w-4" />
               </button>
             ) : null}
           </div>
         </form>
 
         {earningMessage ? <p className="mt-3 rounded-[16px] bg-warm/70 px-3 py-2 text-xs font-bold text-muted">{earningMessage}</p> : null}
-        {dailyEarningStats.days.length ? (
-          <div className="mt-4 divide-y divide-black/[0.05]">
-            <p className="pb-2 text-xs font-black text-muted">当前范围内每日明细</p>
-            {dailyEarningStats.days.map((item) => (
-              <div key={item.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                <div className="min-w-0">
-                  <p className="font-black">{fullDate(item.earning_date)}</p>
-                  {item.notes ? <p className="mt-0.5 truncate text-xs font-bold text-muted">{item.notes}</p> : null}
-                </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <p className="mr-1 font-black">{money(item.amount) || "¥0"}</p>
-                  <button type="button" onClick={() => startEditDailyEarning(item)} className="rounded-full bg-warm px-2.5 py-1 text-xs font-black text-muted">
-                    编辑
-                  </button>
-                  <button type="button" onClick={() => deleteDailyEarning(item)} disabled={earningSaving} className="flex h-7 w-7 items-center justify-center rounded-full bg-rose-50 text-rose-500 disabled:opacity-50" aria-label="删除收益">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : null}
       </section>
 
       <section className="mt-6">
