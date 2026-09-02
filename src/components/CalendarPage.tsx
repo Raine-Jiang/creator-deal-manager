@@ -5,8 +5,9 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { getCalendarEvents } from "@/lib/deal-status";
 import { monthMatrix, monthTitle, todayKey } from "@/lib/date-utils";
-import { money } from "@/lib/format";
+import { fullDate, money } from "@/lib/format";
 import { useDeals } from "@/lib/use-deals";
+import { useDailyEarnings } from "@/lib/use-daily-earnings";
 import { AppShell } from "./AppShell";
 
 const week = ["日", "一", "二", "三", "四", "五", "六"];
@@ -17,6 +18,7 @@ export function CalendarPage() {
   const [cursor, setCursor] = useState({ year: now.getFullYear(), month: now.getMonth() });
   const [selected, setSelected] = useState(todayKey());
   const { deals, error } = useDeals(false);
+  const { earnings, error: earningsError } = useDailyEarnings();
   const events = getCalendarEvents(deals);
 
   const days = useMemo(() => monthMatrix(cursor.year, cursor.month), [cursor]);
@@ -27,6 +29,22 @@ export function CalendarPage() {
     }, {});
   }, [events]);
   const selectedGroups = useMemo(() => groupCalendarEvents(eventsByDate[selected] || []), [eventsByDate, selected]);
+  const earningsByDate = useMemo(() => {
+    return earnings.reduce<Record<string, number>>((map, item) => {
+      map[item.earning_date] = (map[item.earning_date] || 0) + Number(item.amount || 0);
+      return map;
+    }, {});
+  }, [earnings]);
+  const monthStats = useMemo(() => {
+    const monthKey = `${cursor.year}-${String(cursor.month + 1).padStart(2, "0")}`;
+    const monthDeals = events.filter((event) => event.date.startsWith(monthKey));
+    const dealIds = new Set(monthDeals.map((event) => event.dealId));
+    const creatorRevenue = earnings
+      .filter((item) => item.earning_date.startsWith(monthKey))
+      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    return { dealCount: dealIds.size, creatorRevenue };
+  }, [cursor.month, cursor.year, earnings, events]);
+  const selectedEarning = useMemo(() => earnings.find((item) => item.earning_date === selected), [earnings, selected]);
 
   function moveMonth(amount: number) {
     const date = new Date(cursor.year, cursor.month + amount, 1);
@@ -38,7 +56,12 @@ export function CalendarPage() {
       <header className="pt-2">
         <h1 className="text-[38px] font-black leading-none">日历</h1>
       </header>
-      {error ? <p className="mt-4 rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-600">{error}</p> : null}
+      {error || earningsError ? <p className="mt-4 rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-600">{error || earningsError}</p> : null}
+
+      <section className="mt-5 grid grid-cols-2 gap-3">
+        <CalendarStat label={`${cursor.month + 1}月合作`} value={`${monthStats.dealCount}`} />
+        <CalendarStat label="创作者收益" value={money(monthStats.creatorRevenue) || "¥0"} />
+      </section>
 
       <section className="mt-5 rounded-[26px] bg-transparent p-1">
         <div className="mb-4 flex items-center justify-between">
@@ -54,16 +77,18 @@ export function CalendarPage() {
           {week.map((item) => <div key={item} className="text-sm font-black text-muted">{item}</div>)}
           {days.map((day) => {
             const dayEvents = eventsByDate[day.key] || [];
+            const dailyEarning = earningsByDate[day.key] || 0;
             const active = day.key === selected;
             return (
               <button
                 key={day.key}
                 onClick={() => setSelected(day.key)}
-                className={`mx-auto flex h-[54px] w-full flex-col items-center justify-center rounded-[14px] border text-base font-black ${
+                className={`mx-auto flex h-[62px] w-full flex-col items-center justify-center rounded-[14px] border text-base font-black ${
                   active ? "border-black bg-black text-white" : day.inMonth ? "border-stone-200 bg-white/74 text-ink" : "border-stone-100 bg-white/45 text-stone-300"
                 }`}
               >
                 <span>{day.day}</span>
+                {dailyEarning ? <span className={`mt-0.5 max-w-full truncate px-1 text-[10px] font-black leading-none ${active ? "text-emerald-200" : "text-emerald-600"}`}>{compactMoney(dailyEarning)}</span> : null}
                 <span className="mt-0.5 flex h-1.5 max-w-10 gap-0.5 overflow-hidden">
                   {uniqueLabelEvents(dayEvents).slice(0, 4).map((event) => (
                     <span key={`${event.label}-${event.type}`} className={`h-1.5 w-3 shrink-0 rounded-full ${calendarTone(event).dot}`} />
@@ -78,6 +103,18 @@ export function CalendarPage() {
       <section className="mt-6">
         <h2 className="mb-3 text-xl font-black">{selected.slice(5).replace("-", "月")}日安排</h2>
         <div className="space-y-3">
+          {selectedEarning ? (
+            <article className="rounded-[22px] border border-emerald-200 bg-[linear-gradient(135deg,#f6fff9,#e3f8ec)] p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-black text-emerald-700">每日收益</p>
+                  <p className="mt-1 text-sm font-bold text-muted">{fullDate(selectedEarning.earning_date)}</p>
+                  {selectedEarning.notes ? <p className="mt-2 text-sm font-bold leading-5 text-muted">{selectedEarning.notes}</p> : null}
+                </div>
+                <p className="shrink-0 text-xl font-black text-emerald-900">{money(selectedEarning.amount) || "¥0"}</p>
+              </div>
+            </article>
+          ) : null}
           {selectedGroups.length ? selectedGroups.map((group) => {
             const tone = calendarTone(group.items[0]);
             return (
@@ -107,9 +144,9 @@ export function CalendarPage() {
                 </div>
               </details>
             );
-          }) : (
+          }) : !selectedEarning ? (
             <div className="card p-5 text-center text-sm font-bold text-muted">这天没有安排</div>
-          )}
+          ) : null}
         </div>
       </section>
     </AppShell>
@@ -163,4 +200,18 @@ function calendarTone(event: ReturnType<typeof getCalendarEvents>[number]) {
     panel: "border-stone-200 bg-white/78",
     badge: "bg-stone-100 text-stone-600",
   };
+}
+
+function compactMoney(value: number) {
+  if (value >= 10000) return `¥${Math.round(value / 10000)}w`;
+  return `¥${Math.round(value)}`;
+}
+
+function CalendarStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[22px] border border-black/[0.05] bg-white/76 p-4">
+      <p className="text-sm font-black text-muted">{label}</p>
+      <p className="mt-1 truncate text-2xl font-black text-ink">{value}</p>
+    </div>
+  );
 }

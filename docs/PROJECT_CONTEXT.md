@@ -125,6 +125,9 @@ Rules:
   - Pending refund: `advance_amount` exists and `refund_received = false`.
 - Calendar:
   - Uses `publish_deadline`.
+  - Month header stats show unique deal count for the visible month and creator revenue for the visible month.
+  - Also displays daily creator revenue under each day number when a `daily_earnings` record exists.
+  - Selecting a day should show that day's creator revenue detail above deal schedule items.
   - Status colors:
     - waiting to publish / unfinished: red or warm warning
     - published but not completed: green or active
@@ -138,6 +141,8 @@ Rules:
 - Daily creator revenue:
   - Period is based on `earning_date`.
   - Keep separate from deal commission totals.
+  - Finance page owns range statistics and range daily detail.
+  - Calendar page owns per-day visibility.
 - Excel import:
   - Preserve useful unmatched columns by appending them to notes as `Header：Value`.
   - Embedded images are best-effort matched to row number, compressed to WebP and uploaded to Supabase Storage.

@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   ChevronRight,
   CircleDollarSign,
-  Clock,
   Database,
   Download,
   FileSpreadsheet,
@@ -305,6 +304,7 @@ type FocusItem = {
   type: "publish" | "payment";
   title: string;
   product: string;
+  imageUrl: string | null;
   label: string;
   dateLabel: string;
   footnote: string;
@@ -325,6 +325,7 @@ function getFocusItems(deals: Deal[]): FocusItem[] {
         type: "publish",
         title: deal.brand || "未命名品牌",
         product: deal.product_name || "合作",
+        imageUrl: deal.product_image_url,
         label: "即将到期发布",
         dateLabel: `最晚发布：${fullDate(deal.publish_deadline)}`,
         footnote: left <= 0 ? "今天到期" : `剩余 ${left} 天`,
@@ -340,6 +341,7 @@ function getFocusItems(deals: Deal[]): FocusItem[] {
         type: "payment",
         title: deal.brand || "未命名品牌",
         product: deal.product_name || "合作",
+        imageUrl: deal.product_image_url,
         label: "待收合作佣金",
         dateLabel: deal.expected_payment_date ? `预计回款：${fullDate(deal.expected_payment_date)}` : "待确认收款",
         footnote: money(commission) || "",
@@ -370,14 +372,11 @@ function FocusCard({ item }: { item: FocusItem }) {
     : item.type === "payment"
       ? "border-violet-200 bg-[linear-gradient(135deg,#fbf7ff,#f0e6ff)]"
       : "border-blue-200 bg-[linear-gradient(135deg,#f7fbff,#e9f3ff)]";
-  const Icon = item.type === "publish" ? Clock : CircleDollarSign;
 
   return (
     <Link href={`/deals/${item.dealId}`} className="block rounded-[24px] focus:outline-none focus:ring-4 focus:ring-violet-200">
       <article className={`flex min-w-0 gap-3 rounded-[22px] border p-3.5 ${tone}`}>
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[15px] bg-white/70">
-          <Icon className="h-5 w-5" />
-        </div>
+        <ProductMark imageUrl={item.imageUrl} label={item.product} size="sm" />
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">

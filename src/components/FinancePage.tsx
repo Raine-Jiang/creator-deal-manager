@@ -45,7 +45,7 @@ export function FinancePage() {
     return {
       total: scoped.reduce((sum, item) => sum + Number(item.amount || 0), 0),
       count: scoped.length,
-      recent: scoped.slice(0, 5),
+      days: scoped.slice(0, 60),
     };
   }, [activeRange, earnings]);
 
@@ -173,9 +173,10 @@ export function FinancePage() {
         </form>
 
         {earningMessage ? <p className="mt-3 rounded-[16px] bg-warm/70 px-3 py-2 text-xs font-bold text-muted">{earningMessage}</p> : null}
-        {dailyEarningStats.recent.length ? (
+        {dailyEarningStats.days.length ? (
           <div className="mt-4 divide-y divide-black/[0.05]">
-            {dailyEarningStats.recent.map((item) => (
+            <p className="pb-2 text-xs font-black text-muted">当前范围内每日明细</p>
+            {dailyEarningStats.days.map((item) => (
               <div key={item.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
                 <div className="min-w-0">
                   <p className="font-black">{fullDate(item.earning_date)}</p>
