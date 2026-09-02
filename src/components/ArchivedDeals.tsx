@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Search } from "lucide-react";
 import type { Deal } from "@/lib/types";
 import { useDeals } from "@/lib/use-deals";
-import { fullDate } from "@/lib/format";
+import { fullDate, fullDateTime } from "@/lib/format";
 import { AppShell } from "./AppShell";
 import { DealCard } from "./DealCard";
 
@@ -118,8 +118,9 @@ function timelineValue(deal: Deal) {
 }
 
 function timelineLabel(deal: Deal) {
-  const label = deal.publish_date ? "发布时间" : deal.archived_at ? "完成时间" : "创建时间";
-  return `${label} ${fullDate(timelineDate(deal))}`;
+  if (deal.publish_date) return `发布时间 ${fullDate(deal.publish_date)}`;
+  if (deal.archived_at) return `完成时间 ${fullDateTime(deal.archived_at)}`;
+  return `创建时间 ${fullDateTime(deal.created_at)}`;
 }
 
 function groupByMonth(deals: Deal[]) {

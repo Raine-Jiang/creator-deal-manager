@@ -123,13 +123,13 @@ export function DealsList() {
           <p className="card p-6 text-center text-sm font-bold text-muted">正在读取合作...</p>
         ) : filteredDeals.length ? (
           filteredDeals.map((deal) => (
-            <div key={deal.id} className="relative">
+            <div key={deal.id} className={selectMode ? "grid grid-cols-[44px_1fr] items-center gap-2" : ""}>
               {selectMode ? (
-                <button type="button" onClick={() => toggleSelected(deal.id)} className="absolute left-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-black/[0.08] bg-white/90">
+                <button type="button" onClick={() => toggleSelected(deal.id)} className="flex h-10 w-10 items-center justify-center rounded-full border border-black/[0.08] bg-white/90">
                   {selectedIds.includes(deal.id) ? <Check className="h-5 w-5 text-emerald-600" /> : null}
                 </button>
               ) : null}
-              <div className={selectMode ? "pointer-events-none pl-5" : ""}>
+              <div className={selectMode ? "pointer-events-none min-w-0" : ""}>
                 <DealCard deal={deal} />
               </div>
             </div>

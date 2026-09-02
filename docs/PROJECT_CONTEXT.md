@@ -142,6 +142,7 @@ Rules:
   - Period is based on `earning_date`.
   - Keep separate from deal commission totals.
   - Finance page owns range statistics and range daily detail.
+  - Finance page allows editing and deleting a single daily earning record when the user enters a wrong amount.
   - Calendar page owns per-day visibility.
 - Excel import:
   - Preserve useful unmatched columns by appending them to notes as `Header：Value`.

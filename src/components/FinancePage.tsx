@@ -2,11 +2,12 @@
 
 import type { FormEvent, ReactNode } from "react";
 import { useMemo, useState } from "react";
-import { CircleDollarSign, PencilLine, RotateCcw, WalletCards } from "lucide-react";
+import { CircleDollarSign, PencilLine, RotateCcw, Trash2, WalletCards, X } from "lucide-react";
 import type { FinanceRange } from "@/lib/finance";
 import { filterDealsByFinanceRange, getCategoryFinance, getFinanceDateBounds, getFinanceSummary, isDateInBounds } from "@/lib/finance";
 import { fullDate, money } from "@/lib/format";
 import { todayKey } from "@/lib/date-utils";
+import type { DailyEarning } from "@/lib/types";
 import { useDeals } from "@/lib/use-deals";
 import { useDailyEarnings } from "@/lib/use-daily-earnings";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
@@ -31,6 +32,7 @@ export function FinancePage() {
   const [earningNotes, setEarningNotes] = useState("");
   const [earningMessage, setEarningMessage] = useState("");
   const [earningSaving, setEarningSaving] = useState(false);
+  const [editingEarningId, setEditingEarningId] = useState<string | null>(null);
   const { deals, loading, error } = useDeals("all");
   const { earnings, loading: earningsLoading, error: earningsError, reload: reloadEarnings } = useDailyEarnings();
   const activeRange: FinanceRange = useMemo(
@@ -72,14 +74,23 @@ export function FinancePage() {
       return;
     }
 
-    const { error: saveError } = await supabase
-      .from("daily_earnings")
-      .upsert({
-        user_id: userId,
-        earning_date: earningDate,
-        amount,
-        notes: earningNotes.trim() || null,
-      }, { onConflict: "user_id,earning_date" });
+    const { error: saveError } = editingEarningId
+      ? await supabase
+        .from("daily_earnings")
+        .update({
+          earning_date: earningDate,
+          amount,
+          notes: earningNotes.trim() || null,
+        })
+        .eq("id", editingEarningId)
+      : await supabase
+        .from("daily_earnings")
+        .upsert({
+          user_id: userId,
+          earning_date: earningDate,
+          amount,
+          notes: earningNotes.trim() || null,
+        }, { onConflict: "user_id,earning_date" });
 
     setEarningSaving(false);
     if (saveError) {
@@ -88,7 +99,41 @@ export function FinancePage() {
     }
     setEarningAmount("");
     setEarningNotes("");
-    setEarningMessage("已保存当天收益。");
+    setEditingEarningId(null);
+    setEarningMessage(editingEarningId ? "已更新这条收益。" : "已保存当天收益。");
+    reloadEarnings();
+  }
+
+  function startEditDailyEarning(item: DailyEarning) {
+    setEditingEarningId(item.id);
+    setEarningDate(item.earning_date);
+    setEarningAmount(String(item.amount || ""));
+    setEarningNotes(item.notes || "");
+    setEarningMessage("正在编辑这条收益，修改后点击保存。");
+  }
+
+  function cancelEditDailyEarning() {
+    setEditingEarningId(null);
+    setEarningDate(todayKey());
+    setEarningAmount("");
+    setEarningNotes("");
+    setEarningMessage("");
+  }
+
+  async function deleteDailyEarning(item: DailyEarning) {
+    if (!supabase) return;
+    const confirmed = window.confirm(`确定删除 ${fullDate(item.earning_date)} 的收益记录吗？`);
+    if (!confirmed) return;
+
+    setEarningSaving(true);
+    const { error: deleteError } = await supabase.from("daily_earnings").delete().eq("id", item.id);
+    setEarningSaving(false);
+    if (deleteError) {
+      setEarningMessage(deleteError.message);
+      return;
+    }
+    if (editingEarningId === item.id) cancelEditDailyEarning();
+    setEarningMessage("已删除这条收益。");
     reloadEarnings();
   }
 
@@ -166,10 +211,17 @@ export function FinancePage() {
             placeholder="备注，比如抖音、视频收益、直播收益"
             className="rounded-[16px] bg-warm/70 px-3 py-3 text-sm font-bold outline-none placeholder:text-muted"
           />
-          <button type="submit" disabled={earningSaving || !isSupabaseConfigured} className="flex min-h-11 items-center justify-center gap-2 rounded-[16px] bg-black px-4 text-sm font-black text-white disabled:opacity-50">
-            <PencilLine className="h-4 w-4" />
-            {earningSaving ? "保存中..." : "记录当天收益"}
-          </button>
+          <div className="flex gap-2">
+            <button type="submit" disabled={earningSaving || !isSupabaseConfigured} className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-[16px] bg-black px-4 text-sm font-black text-white disabled:opacity-50">
+              <PencilLine className="h-4 w-4" />
+              {earningSaving ? "保存中..." : editingEarningId ? "保存修改" : "记录当天收益"}
+            </button>
+            {editingEarningId ? (
+              <button type="button" onClick={cancelEditDailyEarning} className="flex min-h-11 w-12 items-center justify-center rounded-[16px] bg-warm text-muted">
+                <X className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
         </form>
 
         {earningMessage ? <p className="mt-3 rounded-[16px] bg-warm/70 px-3 py-2 text-xs font-bold text-muted">{earningMessage}</p> : null}
@@ -182,7 +234,15 @@ export function FinancePage() {
                   <p className="font-black">{fullDate(item.earning_date)}</p>
                   {item.notes ? <p className="mt-0.5 truncate text-xs font-bold text-muted">{item.notes}</p> : null}
                 </div>
-                <p className="shrink-0 font-black">{money(item.amount) || "¥0"}</p>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <p className="mr-1 font-black">{money(item.amount) || "¥0"}</p>
+                  <button type="button" onClick={() => startEditDailyEarning(item)} className="rounded-full bg-warm px-2.5 py-1 text-xs font-black text-muted">
+                    编辑
+                  </button>
+                  <button type="button" onClick={() => deleteDailyEarning(item)} disabled={earningSaving} className="flex h-7 w-7 items-center justify-center rounded-full bg-rose-50 text-rose-500 disabled:opacity-50" aria-label="删除收益">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
