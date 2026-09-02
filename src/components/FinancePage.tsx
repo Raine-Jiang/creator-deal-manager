@@ -1,12 +1,15 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { useState } from "react";
-import { CircleDollarSign, RotateCcw, WalletCards } from "lucide-react";
+import type { FormEvent, ReactNode } from "react";
+import { useMemo, useState } from "react";
+import { CircleDollarSign, PencilLine, RotateCcw, WalletCards } from "lucide-react";
 import type { FinanceRange } from "@/lib/finance";
-import { filterDealsByFinanceRange, getCategoryFinance, getFinanceSummary } from "@/lib/finance";
-import { money } from "@/lib/format";
+import { filterDealsByFinanceRange, getCategoryFinance, getFinanceDateBounds, getFinanceSummary, isDateInBounds } from "@/lib/finance";
+import { fullDate, money } from "@/lib/format";
+import { todayKey } from "@/lib/date-utils";
 import { useDeals } from "@/lib/use-deals";
+import { useDailyEarnings } from "@/lib/use-daily-earnings";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { AppShell } from "./AppShell";
 
 type FinancePreset = Exclude<FinanceRange, { start?: string; end?: string }>;
@@ -23,10 +26,71 @@ export function FinancePage() {
   const [range, setRange] = useState<FinancePreset>("currentMonth");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
+  const [earningDate, setEarningDate] = useState(todayKey());
+  const [earningAmount, setEarningAmount] = useState("");
+  const [earningNotes, setEarningNotes] = useState("");
+  const [earningMessage, setEarningMessage] = useState("");
+  const [earningSaving, setEarningSaving] = useState(false);
   const { deals, loading, error } = useDeals("all");
-  const activeRange: FinanceRange = customStart || customEnd ? { start: customStart, end: customEnd } : range;
+  const { earnings, loading: earningsLoading, error: earningsError, reload: reloadEarnings } = useDailyEarnings();
+  const activeRange: FinanceRange = useMemo(
+    () => (customStart || customEnd ? { start: customStart, end: customEnd } : range),
+    [customEnd, customStart, range],
+  );
   const summary = getFinanceSummary(deals, activeRange);
   const categories = getCategoryFinance(filterDealsByFinanceRange(deals, activeRange));
+  const dailyEarningStats = useMemo(() => {
+    const { start, end } = getFinanceDateBounds(activeRange);
+    const scoped = earnings.filter((item) => isDateInBounds(item.earning_date, start, end));
+    return {
+      total: scoped.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+      count: scoped.length,
+      recent: scoped.slice(0, 5),
+    };
+  }, [activeRange, earnings]);
+
+  async function saveDailyEarning(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setEarningMessage("");
+    if (!supabase) {
+      setEarningMessage("当前是演示模式，登录 Supabase 后才能保存。");
+      return;
+    }
+
+    const amount = Number(earningAmount.replace(/[^\d.]/g, ""));
+    if (!earningDate || !amount) {
+      setEarningMessage("请选择日期并填写收益金额。");
+      return;
+    }
+
+    setEarningSaving(true);
+    const { data } = await supabase.auth.getSession();
+    const userId = data.session?.user.id;
+    if (!userId) {
+      setEarningSaving(false);
+      setEarningMessage("请先登录后再记录收益。");
+      return;
+    }
+
+    const { error: saveError } = await supabase
+      .from("daily_earnings")
+      .upsert({
+        user_id: userId,
+        earning_date: earningDate,
+        amount,
+        notes: earningNotes.trim() || null,
+      }, { onConflict: "user_id,earning_date" });
+
+    setEarningSaving(false);
+    if (saveError) {
+      setEarningMessage(saveError.message);
+      return;
+    }
+    setEarningAmount("");
+    setEarningNotes("");
+    setEarningMessage("已保存当天收益。");
+    reloadEarnings();
+  }
 
   return (
     <AppShell>
@@ -34,7 +98,7 @@ export function FinancePage() {
         <h1 className="text-[38px] font-black leading-none">财务</h1>
       </header>
 
-      {error ? <p className="mt-4 rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-600">{error}</p> : null}
+      {error || earningsError ? <p className="mt-4 rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-600">{error || earningsError}</p> : null}
 
       <div className="no-scrollbar -mx-3 mt-5 flex gap-2 overflow-x-auto px-3">
         {ranges.map((item) => (
@@ -68,6 +132,60 @@ export function FinancePage() {
         <Metric title="待收佣金" value={money(summary.pendingCommission) || "¥0"} icon={<CircleDollarSign className="h-5 w-5" />} tint="violet" />
         <Metric title="总本金" value={money(summary.totalPrincipal) || "¥0"} icon={<WalletCards className="h-5 w-5" />} tint="yellow" />
         <Metric title="待收本金" value={money(summary.pendingPrincipal) || "¥0"} icon={<RotateCcw className="h-5 w-5" />} tint="pink" />
+      </section>
+
+      <section className="mt-5 rounded-[24px] border border-black/[0.05] bg-white/76 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-black">每日收益</h2>
+            <p className="mt-1 text-xs font-bold text-muted">抖音等平台的创作者收益，按日期手动记录。</p>
+          </div>
+          <div className="shrink-0 text-right">
+            <p className="text-xs font-black text-muted">{dailyEarningStats.count} 天</p>
+            <p className="mt-1 text-xl font-black">{earningsLoading ? "..." : money(dailyEarningStats.total) || "¥0"}</p>
+          </div>
+        </div>
+
+        <form onSubmit={saveDailyEarning} className="mt-4 grid gap-2">
+          <div className="grid grid-cols-[1fr_1.1fr] gap-2">
+            <DateField label="日期" value={earningDate} onChange={setEarningDate} />
+            <label className="min-w-0 rounded-[16px] bg-warm/70 px-3 py-2">
+              <span className="text-xs font-black text-muted">收益金额</span>
+              <input
+                value={earningAmount}
+                onChange={(event) => setEarningAmount(event.target.value.replace(/[^\d.]/g, ""))}
+                placeholder="0"
+                inputMode="decimal"
+                className="mt-1 w-full min-w-0 bg-transparent text-sm font-black outline-none"
+              />
+            </label>
+          </div>
+          <input
+            value={earningNotes}
+            onChange={(event) => setEarningNotes(event.target.value)}
+            placeholder="备注，比如抖音、视频收益、直播收益"
+            className="rounded-[16px] bg-warm/70 px-3 py-3 text-sm font-bold outline-none placeholder:text-muted"
+          />
+          <button type="submit" disabled={earningSaving || !isSupabaseConfigured} className="flex min-h-11 items-center justify-center gap-2 rounded-[16px] bg-black px-4 text-sm font-black text-white disabled:opacity-50">
+            <PencilLine className="h-4 w-4" />
+            {earningSaving ? "保存中..." : "记录当天收益"}
+          </button>
+        </form>
+
+        {earningMessage ? <p className="mt-3 rounded-[16px] bg-warm/70 px-3 py-2 text-xs font-bold text-muted">{earningMessage}</p> : null}
+        {dailyEarningStats.recent.length ? (
+          <div className="mt-4 divide-y divide-black/[0.05]">
+            {dailyEarningStats.recent.map((item) => (
+              <div key={item.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                <div className="min-w-0">
+                  <p className="font-black">{fullDate(item.earning_date)}</p>
+                  {item.notes ? <p className="mt-0.5 truncate text-xs font-bold text-muted">{item.notes}</p> : null}
+                </div>
+                <p className="shrink-0 font-black">{money(item.amount) || "¥0"}</p>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       <section className="mt-6">

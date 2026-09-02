@@ -16,6 +16,11 @@ export type CategoryFinance = {
   pendingPrincipal: number;
 };
 
+export type DateBounds = {
+  start: number;
+  end: number;
+};
+
 export function parseMoneyText(value?: string | null) {
   if (!value || value.includes("%")) return 0;
   const normalized = value.replace(/,/g, "").match(/\d+(\.\d+)?/);
@@ -32,6 +37,12 @@ function financeDate(deal: Deal) {
 
 export function filterDealsByFinanceRange(deals: Deal[], range: FinanceRange) {
   if (range === "all") return deals;
+  const { start, end } = getFinanceDateBounds(range);
+  return deals.filter((deal) => isDateInBounds(financeDate(deal), start, end));
+}
+
+export function getFinanceDateBounds(range: FinanceRange): DateBounds {
+  if (range === "all") return { start: Number.NEGATIVE_INFINITY, end: Number.POSITIVE_INFINITY };
   const now = new Date();
   const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
@@ -50,10 +61,13 @@ export function filterDealsByFinanceRange(deals: Deal[], range: FinanceRange) {
     end = range.end ? new Date(`${range.end}T23:59:59`).getTime() : Number.POSITIVE_INFINITY;
   }
 
-  return deals.filter((deal) => {
-    const date = new Date(`${financeDate(deal)}T00:00:00`).getTime();
-    return !Number.isNaN(date) && date >= start && date <= end;
-  });
+  return { start, end };
+}
+
+export function isDateInBounds(value: string | null | undefined, start: number, end: number) {
+  if (!value) return false;
+  const date = new Date(`${value}T00:00:00`).getTime();
+  return !Number.isNaN(date) && date >= start && date <= end;
 }
 
 export function getFinanceSummary(deals: Deal[], range: FinanceRange = "currentMonth") {

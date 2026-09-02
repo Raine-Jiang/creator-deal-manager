@@ -117,3 +117,13 @@ export type CalendarEvent = {
   completed: boolean;
   overdue: boolean;
 };
+
+export type DailyEarning = {
+  id: string;
+  user_id: string | null;
+  earning_date: string;
+  amount: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};

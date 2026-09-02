@@ -153,6 +153,55 @@ on public.deals for delete
 to authenticated
 using ((select auth.uid()) = user_id);
 
+create table if not exists public.daily_earnings (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  earning_date date not null,
+  amount numeric not null default 0,
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, earning_date)
+);
+
+create index if not exists daily_earnings_user_date_idx
+  on public.daily_earnings (user_id, earning_date desc);
+
+drop trigger if exists daily_earnings_set_updated_at on public.daily_earnings;
+create trigger daily_earnings_set_updated_at
+before update on public.daily_earnings
+for each row
+execute function public.set_updated_at();
+
+alter table public.daily_earnings enable row level security;
+
+grant select, insert, update, delete on public.daily_earnings to authenticated;
+
+drop policy if exists "Users can read own daily earnings" on public.daily_earnings;
+create policy "Users can read own daily earnings"
+on public.daily_earnings for select
+to authenticated
+using ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can insert own daily earnings" on public.daily_earnings;
+create policy "Users can insert own daily earnings"
+on public.daily_earnings for insert
+to authenticated
+with check ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can update own daily earnings" on public.daily_earnings;
+create policy "Users can update own daily earnings"
+on public.daily_earnings for update
+to authenticated
+using ((select auth.uid()) = user_id)
+with check ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can delete own daily earnings" on public.daily_earnings;
+create policy "Users can delete own daily earnings"
+on public.daily_earnings for delete
+to authenticated
+using ((select auth.uid()) = user_id);
+
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'deal-product-images',

@@ -12,6 +12,7 @@ import {
   Clock,
   Database,
   Download,
+  FileSpreadsheet,
   KeyRound,
   LogOut,
   Plus,
@@ -29,14 +30,16 @@ import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import type { Deal } from "@/lib/types";
 import { useDeals } from "@/lib/use-deals";
 import { AppShell } from "./AppShell";
+import { DealImporter } from "./DealImporter";
 import { ProductMark } from "./ProductMark";
 import { SetupNotice } from "./SetupNotice";
 import { StatusChip } from "./StatusChip";
 
 export function Dashboard() {
   const router = useRouter();
-  const { deals, loading, error } = useDeals("all");
+  const { deals, loading, error, reload } = useDeals("all");
   const [profileOpen, setProfileOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
@@ -239,6 +242,7 @@ export function Dashboard() {
             <ProfileGroup title="数据">
               <ProfileAction href="/deals/archived" icon={<Archive className="h-5 w-5" />} title="已完成合作" />
               <ProfileAction href="/deals/trash" icon={<Trash2 className="h-5 w-5" />} title="垃圾桶" subtitle="删除后的合作会保留 30 天。" />
+              <ProfileAction icon={<FileSpreadsheet className="h-5 w-5" />} title="导入 Excel" subtitle="从旧表格批量导入合作。" onClick={() => setImportOpen(true)} />
               <ProfileAction icon={<Download className="h-5 w-5" />} title="导出数据" subtitle="导出为 Excel 可打开的表格文件。" onClick={exportDeals} />
               <ProfileAction icon={<Database className="h-5 w-5" />} title="云端保存" subtitle="合作数据保存在 Supabase，刷新和重新登录后仍会保留。" />
             </ProfileGroup>
@@ -252,6 +256,8 @@ export function Dashboard() {
           </div>
         </div>
       ) : null}
+
+      <DealImporter open={importOpen} onClose={() => setImportOpen(false)} onImported={reload} />
     </AppShell>
   );
 }
