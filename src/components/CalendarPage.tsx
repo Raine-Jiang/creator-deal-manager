@@ -10,7 +10,7 @@ import { useDeals } from "@/lib/use-deals";
 import { AppShell } from "./AppShell";
 
 const week = ["日", "一", "二", "三", "四", "五", "六"];
-const labelOrder = ["待拍摄", "已拍摄", "已发布", "已完成"];
+const labelOrder = ["待发布", "已发布", "已完成"];
 
 export function CalendarPage() {
   const now = new Date();
@@ -98,7 +98,7 @@ export function CalendarPage() {
                       <article className="flex min-w-0 items-center justify-between gap-3 rounded-[18px] bg-white/78 p-3">
                         <div className="min-w-0">
                           <p className="truncate text-base font-black">{event.title}</p>
-                          <p className={`mt-1 text-sm font-bold ${event.overdue ? "text-red-500" : "text-muted"}`}>最晚拍摄日</p>
+                          <p className={`mt-1 text-sm font-bold ${event.overdue ? "text-red-500" : "text-muted"}`}>最晚发布日</p>
                         </div>
                         {event.amount ? <span className="shrink-0 rounded-full bg-white px-3 py-1 text-sm font-black">{money(event.amount)}</span> : null}
                       </article>
@@ -141,15 +141,10 @@ function calendarTone(event: ReturnType<typeof getCalendarEvents>[number]) {
   }
 
   const byLabel: Record<string, { dot: string; panel: string; badge: string }> = {
-    待拍摄: {
+    待发布: {
       dot: "bg-rose-500",
       panel: "border-rose-200 bg-[linear-gradient(135deg,#fff7f8,#ffe8ee)]",
       badge: "bg-rose-100 text-rose-700",
-    },
-    已拍摄: {
-      dot: "bg-blue-500",
-      panel: "border-blue-200 bg-[linear-gradient(135deg,#f5fbff,#ddecff)]",
-      badge: "bg-blue-100 text-blue-700",
     },
     已发布: {
       dot: "bg-emerald-500",

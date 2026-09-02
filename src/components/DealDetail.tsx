@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   CalendarDays,
-  Camera,
   CheckCircle2,
   Edit3,
   LinkIcon,
@@ -27,7 +26,7 @@ import { ProductMark } from "./ProductMark";
 import { SetupNotice } from "./SetupNotice";
 import { StatusChip } from "./StatusChip";
 
-type ActionType = "shoot" | "publish" | "payment" | "refund";
+type ActionType = "publish" | "payment" | "refund";
 type DealUpdate = Partial<Omit<Deal, "id" | "user_id" | "created_at">>;
 
 export function DealDetail({ id }: { id: string }) {
@@ -91,9 +90,7 @@ export function DealDetail({ id }: { id: string }) {
   async function submitQuickAction() {
     if (!sheet) return;
     const fields: DealUpdate =
-      sheet === "shoot"
-        ? { shoot_date: actionDate }
-        : sheet === "publish"
+      sheet === "publish"
           ? { publish_date: actionDate, publish_url: publishUrl || deal?.publish_url || null }
           : sheet === "payment"
             ? { payment_received: true, payment_received_date: actionDate }
@@ -153,7 +150,6 @@ export function DealDetail({ id }: { id: string }) {
           <section className="rounded-[24px] border border-blue-200 bg-[linear-gradient(135deg,#f5fbff,#e7f2ff)] p-4 shadow-soft">
             <h3 className="mb-3 text-lg font-black">快捷记录</h3>
             <div className="grid grid-cols-2 gap-2.5">
-              {!deal.shoot_date ? <QuickButton label="已拍摄" icon={<Camera className="h-4 w-4" />} onClick={() => openSheet("shoot")} /> : null}
               {!deal.publish_date ? <QuickButton label="已发布" icon={<Send className="h-4 w-4" />} onClick={() => openSheet("publish")} /> : null}
               {hasAmount(deal.base_fee) && !deal.payment_received ? <QuickButton label="合作费已收" icon={<WalletCards className="h-4 w-4" />} onClick={() => openSheet("payment")} /> : null}
               {hasAmount(deal.advance_amount) && !deal.refund_received ? <QuickButton label="本金已返" icon={<RotateCcw className="h-4 w-4" />} onClick={() => openSheet("refund")} /> : null}
@@ -184,8 +180,6 @@ export function DealDetail({ id }: { id: string }) {
           <DetailSection title="时间" icon={<CalendarDays className="h-5 w-5" />}>
             <Info label="创建合作" value={fullDateTime(deal.created_at)} />
             <Info label="收货日期" value={fullDate(deal.received_date)} />
-            <Info label="最晚拍摄" value={fullDate(deal.shoot_deadline)} />
-            <Info label="拍摄日期" value={fullDate(deal.shoot_date)} />
             <Info label="最晚发布" value={fullDate(deal.publish_deadline)} highlight />
             <Info label="实际发布" value={fullDate(deal.publish_date)} />
             <Info label="预计回款" value={fullDate(deal.expected_payment_date)} />
@@ -231,7 +225,7 @@ export function DealDetail({ id }: { id: string }) {
 }
 
 function sheetTitle(type: ActionType) {
-  return { shoot: "标记已拍摄", publish: "标记已发布", payment: "合作费已收", refund: "本金已返" }[type];
+  return { publish: "标记已发布", payment: "合作费已收", refund: "本金已返" }[type];
 }
 
 function QuickButton({ label, icon, onClick }: { label: string; icon: ReactNode; onClick: () => void }) {

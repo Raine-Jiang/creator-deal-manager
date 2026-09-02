@@ -1,4 +1,4 @@
-# Creator Deal Manager V1 Setup
+# Creator Deal Manager Setup
 
 ## Supabase
 

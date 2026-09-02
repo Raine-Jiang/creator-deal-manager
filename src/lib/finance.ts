@@ -1,4 +1,5 @@
 import type { Deal } from "./types";
+import { productCategoryOptions } from "./types";
 import { hasAmount } from "./deal-status";
 
 export type FinanceRange = "currentMonth" | "lastMonth" | "quarter" | "year" | "all" | {
@@ -26,7 +27,7 @@ export function commissionAmount(deal: Deal) {
 }
 
 function financeDate(deal: Deal) {
-  return deal.publish_deadline || deal.shoot_deadline || deal.cooperation_date || deal.created_at?.slice(0, 10) || "";
+  return deal.publish_deadline || "";
 }
 
 export function filterDealsByFinanceRange(deals: Deal[], range: FinanceRange) {
@@ -68,6 +69,16 @@ export function getFinanceSummary(deals: Deal[], range: FinanceRange = "currentM
 
 export function getCategoryFinance(deals: Deal[]) {
   const map = new Map<string, CategoryFinance>();
+  for (const category of productCategoryOptions) {
+    map.set(category, {
+      category,
+      deals: 0,
+      totalCommission: 0,
+      pendingCommission: 0,
+      totalPrincipal: 0,
+      pendingPrincipal: 0,
+    });
+  }
 
   for (const deal of deals) {
     const category = deal.product_category || "未分类";
@@ -89,8 +100,10 @@ export function getCategoryFinance(deals: Deal[]) {
   }
 
   return Array.from(map.values()).sort((a, b) => {
+    if (a.deals === 0 && b.deals > 0) return 1;
+    if (b.deals === 0 && a.deals > 0) return -1;
     const amountA = a.totalCommission + a.totalPrincipal;
     const amountB = b.totalCommission + b.totalPrincipal;
-    return amountB - amountA || b.deals - a.deals;
+    return amountB - amountA || b.deals - a.deals || a.category.localeCompare(b.category, "zh-CN");
   });
 }

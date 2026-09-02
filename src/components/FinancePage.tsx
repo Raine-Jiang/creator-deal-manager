@@ -72,6 +72,9 @@ export function FinancePage() {
 
       <section className="mt-6">
         <h2 className="mb-3 text-xl font-black">品类分析</h2>
+        <p className="mb-3 rounded-[18px] bg-white/70 px-4 py-3 text-xs font-bold leading-5 text-muted">
+          品类统计来自每条合作的“品类”字段；旧合作未补品类时会暂时计入未分类。
+        </p>
         <div className="space-y-2.5">
           {categories.length ? categories.map((item) => (
             <div key={item.category} className="rounded-[22px] border border-black/[0.05] bg-white/76 p-4">

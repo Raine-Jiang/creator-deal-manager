@@ -19,7 +19,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import type { CollaborationType, Deal, DealFormValues, Platform, PlatformOption, ProductCategory } from "@/lib/types";
-import { emptyDealValues } from "@/lib/types";
+import { emptyDealValues, productCategoryOptions } from "@/lib/types";
 import {
   isSupabaseConfigured,
   PRODUCT_IMAGE_BUCKET,
@@ -37,7 +37,7 @@ type Props = {
   deal?: Deal | null;
 };
 
-const categoryOptions: ProductCategory[] = ["", "上衣", "裤子", "套装", "裙子", "鞋子", "配饰", "其他"];
+const categoryOptions: ProductCategory[] = ["", ...productCategoryOptions];
 const collaborationOptions: CollaborationType[] = ["送拍", "寄拍"];
 type DealInsert = Database["public"]["Tables"]["deals"]["Insert"];
 type DealUpdate = Database["public"]["Tables"]["deals"]["Update"];
@@ -222,7 +222,7 @@ export function DealForm({ mode, deal }: Props) {
         commission: cleanString(values.commission),
         advance_amount: cleanNumber(values.advance_amount),
         received_date: cleanString(values.received_date),
-        shoot_deadline: cleanString(values.shoot_deadline),
+        shoot_deadline: null,
         shoot_date: cleanString(values.shoot_date),
         publish_deadline: cleanString(values.publish_deadline),
         publish_date: cleanString(values.publish_date),
@@ -357,7 +357,6 @@ export function DealForm({ mode, deal }: Props) {
 
         <FormSection title="时间" icon={<CalendarDays className="h-5 w-5" />} tint="blue">
           <DateInput label="接单日期" value={values.cooperation_date || todayKey()} onChange={(value) => setField("cooperation_date", value)} />
-          <DateInput label="最晚拍摄" value={values.shoot_deadline || ""} onChange={(value) => setField("shoot_deadline", value)} />
           <DateInput label="最晚发布" value={values.publish_deadline || ""} onChange={(value) => setField("publish_deadline", value)} />
         </FormSection>
 

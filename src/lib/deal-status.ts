@@ -81,11 +81,9 @@ export function getCalendarEvents(deals: Deal[]): CalendarEvent[] {
         ? "已完成"
         : deal.publish_date
           ? "已发布"
-          : deal.shoot_date
-            ? "已拍摄"
-            : "待拍摄";
+          : "待发布";
       return [
-        calendarEvent(deal, "shoot", label, deal.shoot_deadline, Boolean(deal.completed || deal.archived_at || deal.publish_date || deal.shoot_date), title),
+        calendarEvent(deal, "publish", label, deal.publish_deadline, Boolean(deal.completed || deal.archived_at || deal.publish_date), title),
       ];
     })
     .filter((event): event is CalendarEvent => Boolean(event))

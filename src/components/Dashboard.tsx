@@ -14,7 +14,6 @@ import {
   Download,
   KeyRound,
   LogOut,
-  PackageCheck,
   Plus,
   ShieldCheck,
   Trash2,
@@ -107,7 +106,7 @@ export function Dashboard() {
   }
 
   function exportDeals() {
-    const columns = ["状态", "品牌", "产品", "品类", "合作形式", "是否垫付", "本金", "佣金", "接单日期", "最晚拍摄", "最晚发布", "已收货", "已发布", "返本情况", "返佣情况", "完成时间", "备注"];
+    const columns = ["状态", "品牌", "产品", "品类", "合作形式", "是否垫付", "本金", "佣金", "接单日期", "最晚发布", "已收货", "已发布", "返本情况", "返佣情况", "完成时间", "备注"];
     const rows = deals.map((deal) => [
       getDealStatus(deal),
       deal.brand || "",
@@ -118,7 +117,6 @@ export function Dashboard() {
       deal.advance_amount || "",
       deal.base_fee || deal.commission || "",
       deal.cooperation_date || "",
-      deal.shoot_deadline || "",
       deal.publish_deadline || "",
       deal.received_date ? "已收货" : "",
       deal.publish_date ? "已发布" : "",
@@ -261,7 +259,7 @@ export function Dashboard() {
 type FocusItem = {
   id: string;
   dealId: string;
-  type: "shoot" | "publish" | "payment";
+  type: "publish" | "payment";
   title: string;
   product: string;
   label: string;
@@ -276,32 +274,17 @@ function getFocusItems(deals: Deal[]): FocusItem[] {
 
   for (const deal of deals) {
     const status = getDealStatus(deal);
-    if (status === "待发布" && deal.shoot_deadline && isWithinNextDays(deal.shoot_deadline, 7, today)) {
-      const left = daysBetween(today, deal.shoot_deadline);
-      items.push({
-        id: `${deal.id}-shoot`,
-        dealId: deal.id,
-        type: "shoot",
-        title: deal.brand || "未命名品牌",
-        product: deal.product_name || "合作",
-        label: "即将到期拍摄",
-        dateLabel: `最晚拍摄：${fullDate(deal.shoot_deadline)}`,
-        footnote: left <= 0 ? "今天到期" : `剩余 ${left} 天`,
-        risk: left <= 2 ? "high" : "normal",
-      });
-    }
-
-    if (deal.shoot_date && !deal.publish_date && deal.publish_deadline) {
+    if (status === "待发布" && deal.publish_deadline && isWithinNextDays(deal.publish_deadline, 7, today)) {
       const left = daysBetween(today, deal.publish_deadline);
       items.push({
-        id: `${deal.id}-publish`,
+        id: `${deal.id}-publish-deadline`,
         dealId: deal.id,
         type: "publish",
         title: deal.brand || "未命名品牌",
         product: deal.product_name || "合作",
-        label: "未完成发布",
-        dateLabel: `最晚发布时间：${fullDate(deal.publish_deadline)}`,
-        footnote: left < 0 ? `已超过 ${Math.abs(left)} 天` : left === 0 ? "今天到期" : `剩余 ${left} 天`,
+        label: "即将到期发布",
+        dateLabel: `最晚发布：${fullDate(deal.publish_deadline)}`,
+        footnote: left <= 0 ? "今天到期" : `剩余 ${left} 天`,
         risk: left <= 2 ? "high" : "normal",
       });
     }
@@ -322,7 +305,7 @@ function getFocusItems(deals: Deal[]): FocusItem[] {
     }
   }
 
-  const order = { shoot: 0, publish: 1, payment: 2 };
+  const order = { publish: 0, payment: 1 };
   return items.sort((a, b) => order[a.type] - order[b.type]).slice(0, 8);
 }
 
@@ -344,7 +327,7 @@ function FocusCard({ item }: { item: FocusItem }) {
     : item.type === "payment"
       ? "border-violet-200 bg-[linear-gradient(135deg,#fbf7ff,#f0e6ff)]"
       : "border-blue-200 bg-[linear-gradient(135deg,#f7fbff,#e9f3ff)]";
-  const Icon = item.type === "shoot" ? PackageCheck : item.type === "publish" ? Clock : CircleDollarSign;
+  const Icon = item.type === "publish" ? Clock : CircleDollarSign;
 
   return (
     <Link href={`/deals/${item.dealId}`} className="block rounded-[24px] focus:outline-none focus:ring-4 focus:ring-violet-200">

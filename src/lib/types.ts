@@ -10,6 +10,7 @@ export type ProductCategory =
   | "配饰"
   | "其他"
   | "";
+export const productCategoryOptions: Exclude<ProductCategory, "">[] = ["上衣", "裤子", "套装", "裙子", "鞋子", "配饰", "其他"];
 export type CollaborationType = "送拍" | "寄拍" | "";
 
 export type Deal = {
