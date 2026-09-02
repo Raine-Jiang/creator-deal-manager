@@ -2,12 +2,12 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowDownUp, Plus, Search } from "lucide-react";
+import { ArrowDownUp, Check, Plus, Search, Trash2 } from "lucide-react";
 import type { DealStatus } from "@/lib/types";
 import { getDealStatus } from "@/lib/deal-status";
 import { todayKey } from "@/lib/date-utils";
 import { useDeals } from "@/lib/use-deals";
-import { isSupabaseConfigured } from "@/lib/supabase";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { AppShell } from "./AppShell";
 import { DealCard } from "./DealCard";
 import { SetupNotice } from "./SetupNotice";
@@ -21,7 +21,11 @@ export function DealsList() {
   const [filter, setFilter] = useState<(typeof filters)[number]>("全部");
   const [dateFilter, setDateFilter] = useState<(typeof dateFilters)[number]>("全部日期");
   const [sortBy, setSortBy] = useState<(typeof sortOptions)[number]>("发布日期近到远");
-  const { deals, loading, error } = useDeals("all");
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [message, setMessage] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const { deals, loading, error, reload } = useDeals("all");
 
   const filteredDeals = useMemo(() => {
     const trimmed = query.trim().toLowerCase();
@@ -100,12 +104,36 @@ export function DealsList() {
 
       {!isSupabaseConfigured ? <div className="mt-4"><SetupNotice /></div> : null}
       {error ? <p className="mt-4 rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-600">{error}</p> : null}
+      {message ? <p className="mt-4 rounded-2xl bg-warm/70 p-3 text-sm font-bold text-muted">{message}</p> : null}
+
+      <div className="mt-4 flex items-center justify-between gap-2">
+        <button type="button" onClick={() => toggleSelectMode(setSelectMode, setSelectedIds)} className="rounded-full border border-black/[0.06] bg-white/72 px-4 py-2 text-sm font-black">
+          {selectMode ? "取消选择" : "批量管理"}
+        </button>
+        {selectMode ? (
+          <button type="button" disabled={!selectedIds.length || deleting} onClick={batchDelete} className="flex items-center gap-1.5 rounded-full bg-black px-4 py-2 text-sm font-black text-white disabled:opacity-40">
+            <Trash2 className="h-4 w-4" />
+            {deleting ? "删除中..." : `删除 ${selectedIds.length} 条`}
+          </button>
+        ) : null}
+      </div>
 
       <section className="mt-5 flex flex-1 flex-col gap-3">
         {loading ? (
           <p className="card p-6 text-center text-sm font-bold text-muted">正在读取合作...</p>
         ) : filteredDeals.length ? (
-          filteredDeals.map((deal) => <DealCard key={deal.id} deal={deal} />)
+          filteredDeals.map((deal) => (
+            <div key={deal.id} className="relative">
+              {selectMode ? (
+                <button type="button" onClick={() => toggleSelected(deal.id)} className="absolute left-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-black/[0.08] bg-white/90">
+                  {selectedIds.includes(deal.id) ? <Check className="h-5 w-5 text-emerald-600" /> : null}
+                </button>
+              ) : null}
+              <div className={selectMode ? "pointer-events-none pl-5" : ""}>
+                <DealCard deal={deal} />
+              </div>
+            </div>
+          ))
         ) : (
           <div className="card flex flex-1 flex-col items-center justify-center p-8 text-center">
             <h2 className="text-2xl font-black">还没有合作记录</h2>
@@ -119,6 +147,38 @@ export function DealsList() {
       </section>
     </AppShell>
   );
+
+  function toggleSelected(id: string) {
+    setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  }
+
+  async function batchDelete() {
+    if (!supabase || !selectedIds.length) return;
+    const confirmed = window.confirm(`确定把 ${selectedIds.length} 条合作移入垃圾桶吗？`);
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setMessage("");
+    const { error: deleteError } = await supabase
+      .from("deals")
+      .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .in("id", selectedIds);
+    setDeleting(false);
+
+    if (deleteError) {
+      setMessage(deleteError.message);
+      return;
+    }
+    setMessage(`已移入垃圾桶 ${selectedIds.length} 条合作。`);
+    setSelectedIds([]);
+    setSelectMode(false);
+    reload();
+  }
+}
+
+function toggleSelectMode(setSelectMode: (value: (current: boolean) => boolean) => void, setSelectedIds: (value: string[]) => void) {
+  setSelectedIds([]);
+  setSelectMode((current) => !current);
 }
 
 function matchesDateFilter(value: string | null, filter: (typeof dateFilters)[number]) {

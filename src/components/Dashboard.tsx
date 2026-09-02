@@ -40,6 +40,11 @@ export function Dashboard() {
   const { deals, loading, error, reload } = useDeals("all");
   const [profileOpen, setProfileOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportBasis, setExportBasis] = useState<ExportDateBasis>("publish_deadline");
+  const [exportRange, setExportRange] = useState<ExportRange>("currentMonth");
+  const [exportStart, setExportStart] = useState("");
+  const [exportEnd, setExportEnd] = useState("");
   const [user, setUser] = useState<User | null>(null);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
@@ -109,8 +114,9 @@ export function Dashboard() {
   }
 
   function exportDeals() {
+    const scopedDeals = filterDealsForExport(deals, exportBasis, exportRange, exportStart, exportEnd);
     const columns = ["状态", "品牌", "产品", "品类", "合作形式", "是否垫付", "本金", "佣金", "接单日期", "最晚发布", "已收货", "已发布", "返本情况", "返佣情况", "完成时间", "备注"];
-    const rows = deals.map((deal) => [
+    const rows = scopedDeals.map((deal) => [
       getDealStatus(deal),
       deal.brand || "",
       deal.product_name || "",
@@ -136,9 +142,12 @@ export function Dashboard() {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `creator-deals-${new Date().toISOString().slice(0, 10)}.xls`;
+    anchor.download = `creator-deals-${exportBasis}-${new Date().toISOString().slice(0, 10)}.xls`;
     anchor.click();
     URL.revokeObjectURL(url);
+    setExportOpen(false);
+    setProfileMessage(`已导出 ${scopedDeals.length} 条合作。`);
+    setProfileError(false);
   }
 
   return (
@@ -243,7 +252,35 @@ export function Dashboard() {
               <ProfileAction href="/deals/archived" icon={<Archive className="h-5 w-5" />} title="已完成合作" />
               <ProfileAction href="/deals/trash" icon={<Trash2 className="h-5 w-5" />} title="垃圾桶" subtitle="删除后的合作会保留 30 天。" />
               <ProfileAction icon={<FileSpreadsheet className="h-5 w-5" />} title="导入 Excel" subtitle="从旧表格批量导入合作。" onClick={() => setImportOpen(true)} />
-              <ProfileAction icon={<Download className="h-5 w-5" />} title="导出数据" subtitle="导出为 Excel 可打开的表格文件。" onClick={exportDeals} />
+              <ProfileAction icon={<Download className="h-5 w-5" />} title="导出数据" subtitle="按日期字段和时间范围导出。" onClick={() => setExportOpen((value) => !value)} />
+              {exportOpen ? (
+                <div className="border-b border-black/[0.05] bg-warm/45 p-3">
+                  <div className="grid gap-2">
+                    <label className="rounded-[16px] bg-white px-3 py-2">
+                      <span className="text-xs font-black text-muted">日期依据</span>
+                      <select value={exportBasis} onChange={(event) => setExportBasis(event.target.value as ExportDateBasis)} className="mt-1 w-full bg-transparent text-sm font-black outline-none">
+                        {exportBasisOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                      </select>
+                    </label>
+                    <label className="rounded-[16px] bg-white px-3 py-2">
+                      <span className="text-xs font-black text-muted">时间范围</span>
+                      <select value={exportRange} onChange={(event) => setExportRange(event.target.value as ExportRange)} className="mt-1 w-full bg-transparent text-sm font-black outline-none">
+                        {exportRangeOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                      </select>
+                    </label>
+                    {exportRange === "custom" ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        <input type="date" value={exportStart} onChange={(event) => setExportStart(event.target.value)} className="min-w-0 rounded-[16px] bg-white px-3 py-3 text-sm font-black outline-none" />
+                        <input type="date" value={exportEnd} onChange={(event) => setExportEnd(event.target.value)} className="min-w-0 rounded-[16px] bg-white px-3 py-3 text-sm font-black outline-none" />
+                      </div>
+                    ) : null}
+                    <button type="button" onClick={exportDeals} className="primary-button justify-center py-3 text-sm">
+                      <Download className="h-4 w-4" />
+                      导出筛选数据
+                    </button>
+                  </div>
+                </div>
+              ) : null}
               <ProfileAction icon={<Database className="h-5 w-5" />} title="云端保存" subtitle="合作数据保存在 Supabase，刷新和重新登录后仍会保留。" />
             </ProfileGroup>
 
@@ -409,6 +446,60 @@ function EmptyLine({ icon, text }: { icon: ReactNode; text: string }) {
 
 function escapeCell(value: string) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+type ExportDateBasis = "created_at" | "cooperation_date" | "publish_deadline" | "publish_date" | "received_date" | "expected_payment_date" | "expected_refund_date";
+type ExportRange = "currentMonth" | "lastMonth" | "quarter" | "year" | "all" | "custom";
+
+const exportBasisOptions: Array<{ label: string; value: ExportDateBasis }> = [
+  { label: "最晚发布日期", value: "publish_deadline" },
+  { label: "合作日期", value: "cooperation_date" },
+  { label: "创建时间", value: "created_at" },
+  { label: "实际发布日期", value: "publish_date" },
+  { label: "收货日期", value: "received_date" },
+  { label: "预计回款", value: "expected_payment_date" },
+  { label: "预计返本", value: "expected_refund_date" },
+];
+
+const exportRangeOptions: Array<{ label: string; value: ExportRange }> = [
+  { label: "本月", value: "currentMonth" },
+  { label: "上月", value: "lastMonth" },
+  { label: "近三个月", value: "quarter" },
+  { label: "近一年", value: "year" },
+  { label: "累计", value: "all" },
+  { label: "自定义", value: "custom" },
+];
+
+function filterDealsForExport(deals: Deal[], basis: ExportDateBasis, range: ExportRange, startValue: string, endValue: string) {
+  if (range === "all") return deals;
+  const { start, end } = exportDateBounds(range, startValue, endValue);
+  return deals.filter((deal) => {
+    const raw = deal[basis];
+    if (!raw) return false;
+    const date = new Date(`${String(raw).slice(0, 10)}T00:00:00`).getTime();
+    return !Number.isNaN(date) && date >= start && date <= end;
+  });
+}
+
+function exportDateBounds(range: ExportRange, startValue: string, endValue: string) {
+  const today = todayKey();
+  const now = new Date(`${today}T00:00:00`);
+  let start = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  let end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).getTime();
+
+  if (range === "lastMonth") {
+    start = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+    end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59).getTime();
+  } else if (range === "quarter") {
+    start = new Date(now.getFullYear(), now.getMonth() - 2, 1).getTime();
+  } else if (range === "year") {
+    start = new Date(now.getFullYear(), now.getMonth() - 11, 1).getTime();
+  } else if (range === "custom") {
+    start = startValue ? new Date(`${startValue}T00:00:00`).getTime() : Number.NEGATIVE_INFINITY;
+    end = endValue ? new Date(`${endValue}T23:59:59`).getTime() : Number.POSITIVE_INFINITY;
+  }
+
+  return { start, end };
 }
 
 function MiniStat({ label, value, urgent }: { label: string; value: string | number; urgent?: boolean }) {

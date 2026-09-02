@@ -117,6 +117,7 @@ Rules:
 ## Data Logic
 
 - Deal list default order: `created_at DESC`.
+- Deal list supports batch soft delete into trash.
 - Home order: `需要关注`, `财务提醒`, `合作统计`, `最近合作`.
 - Need-attention logic:
   - Upcoming publish-related work should be based on `publish_deadline`.
@@ -137,6 +138,12 @@ Rules:
 - Daily creator revenue:
   - Period is based on `earning_date`.
   - Keep separate from deal commission totals.
+- Excel import:
+  - Preserve useful unmatched columns by appending them to notes as `Header：Value`.
+  - Embedded images are best-effort matched to row number, compressed to WebP and uploaded to Supabase Storage.
+  - After a successful import, clear the preview and show a clear success message to prevent duplicate repeated imports.
+- Excel export:
+  - Let the user choose date basis and time range before downloading.
 
 ## Key Files
 
@@ -147,6 +154,8 @@ Rules:
 - `src/lib/deal-status.ts`: derived status logic.
 - `src/lib/finance.ts`: finance period and summary calculations.
 - `src/lib/import-deals.ts`: Excel import parsing.
+- `src/lib/excel-images.ts`: best-effort `.xlsx` embedded image extraction.
+- `src/lib/images.ts`: client-side WebP image compression.
 - `src/components/DealForm.tsx`: create/edit form.
 - `src/components/DealsList.tsx`: active deal list and filters.
 - `src/components/DealDetail.tsx`: detail and quick status actions.

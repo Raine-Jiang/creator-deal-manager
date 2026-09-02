@@ -23,6 +23,7 @@ export type ImportedDealDraft = Pick<
   | "refund_received"
   | "refund_received_date"
   | "notes"
+  | "product_image_url"
   | "completed"
   | "archived_at"
 >;
@@ -54,6 +55,7 @@ const fieldAliases = {
   refund_received: ["返本情况", "本金已返", "是否返本"],
   completed: ["完成合作", "是否完成", "状态"],
   notes: ["备注", "说明", "要求", "拍摄要求", "note"],
+  product_image_url: ["产品图", "商品图", "图片", "图片链接", "产品图片", "商品图片"],
 } satisfies Record<string, string[]>;
 
 export function mapExcelRowToDeal(row: RawRow, rowNumber: number, currentYear = new Date().getFullYear()): ImportPreviewRow {
@@ -68,6 +70,8 @@ export function mapExcelRowToDeal(row: RawRow, rowNumber: number, currentYear = 
   const publishDate = parseDateValue(read("publish_date"), currentYear);
   const paymentDate = parseDateValue(read("expected_payment_date"), currentYear);
   const refundDate = parseDateValue(read("expected_refund_date"), currentYear);
+  const fallbackNotes = collectFallbackNotes(row);
+  const notes = [cleanText(read("notes")), fallbackNotes].filter(Boolean).join("\n");
 
   const draft: ImportedDealDraft = {
     brand: cleanText(read("brand")),
@@ -90,7 +94,8 @@ export function mapExcelRowToDeal(row: RawRow, rowNumber: number, currentYear = 
     expected_refund_date: refundDate,
     refund_received: refundReceived,
     refund_received_date: refundReceived ? refundDate : "",
-    notes: cleanText(read("notes")),
+    notes,
+    product_image_url: normalizeImageUrl(cleanText(read("product_image_url"))),
     completed,
     archived_at: completed ? new Date().toISOString() : null,
   };
@@ -114,6 +119,14 @@ function findValue(row: RawRow, aliases: string[]) {
 
 function normalizeHeader(value: string) {
   return value.toLowerCase().replace(/[\s_：:（）()【】\[\]-]/g, "");
+}
+
+function collectFallbackNotes(row: RawRow) {
+  const knownHeaders = new Set(Object.values(fieldAliases).flat().map(normalizeHeader));
+  return Object.entries(row)
+    .filter(([key, value]) => key && cleanText(value) && !knownHeaders.has(normalizeHeader(key)))
+    .map(([key, value]) => `${key}：${cleanText(value)}`)
+    .join("\n");
 }
 
 function cleanText(value: unknown) {
@@ -201,4 +214,9 @@ function parsePlatforms(value: string): PlatformOption[] {
   if (/抖音|douyin|tiktok/i.test(value)) platforms.add("抖音");
   if (/其他/.test(value)) platforms.add("其他");
   return Array.from(platforms);
+}
+
+function normalizeImageUrl(value: string) {
+  if (/^https?:\/\//i.test(value) || /^data:image\//i.test(value)) return value;
+  return "";
 }

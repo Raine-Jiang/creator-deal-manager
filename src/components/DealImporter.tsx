@@ -2,9 +2,11 @@
 
 import type { ChangeEvent } from "react";
 import { useMemo, useState } from "react";
-import { AlertCircle, FileSpreadsheet, Upload, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, FileSpreadsheet, Upload, X } from "lucide-react";
+import { extractExcelImagesByRow } from "@/lib/excel-images";
+import { compressImageToWebp } from "@/lib/images";
 import { mapExcelRowToDeal, type ImportPreviewRow } from "@/lib/import-deals";
-import { isSupabaseConfigured, supabase, type Database } from "@/lib/supabase";
+import { isSupabaseConfigured, PRODUCT_IMAGE_BUCKET, supabase, type Database } from "@/lib/supabase";
 import { displayTitle, money, shortDate } from "@/lib/format";
 
 type Props = {
@@ -19,7 +21,9 @@ export function DealImporter({ open, onClose, onImported }: Props) {
   const [rows, setRows] = useState<ImportPreviewRow[]>([]);
   const [fileName, setFileName] = useState("");
   const [message, setMessage] = useState("");
+  const [success, setSuccess] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [imageFiles, setImageFiles] = useState<Map<number, File>>(new Map());
   const validRows = useMemo(() => rows.filter((row) => row.draft.brand || row.draft.product_name), [rows]);
   const warningCount = useMemo(() => rows.reduce((total, row) => total + row.warnings.length, 0), [rows]);
 
@@ -30,7 +34,9 @@ export function DealImporter({ open, onClose, onImported }: Props) {
     if (!file) return;
     setBusy(true);
     setMessage("");
+    setSuccess(false);
     setRows([]);
+    setImageFiles(new Map());
     setFileName(file.name);
 
     try {
@@ -48,8 +54,10 @@ export function DealImporter({ open, onClose, onImported }: Props) {
       const preview = jsonRows
         .map((row: Record<string, unknown>, index: number) => mapExcelRowToDeal(row, index + 2, currentYear))
         .filter((row: ImportPreviewRow) => row.draft.brand || row.draft.product_name || row.warnings.length);
+      const images = await extractExcelImagesByRow(file);
       setRows(preview);
-      setMessage(preview.length ? `已读取 ${preview.length} 行，确认后会导入 ${preview.filter((row) => row.draft.brand || row.draft.product_name).length} 行。` : "没有识别到可导入的数据。");
+      setImageFiles(images);
+      setMessage(preview.length ? `已读取 ${preview.length} 行，确认后会导入 ${preview.filter((row) => row.draft.brand || row.draft.product_name).length} 行；识别到 ${images.size} 张嵌入图片。` : "没有识别到可导入的数据。");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Excel 解析失败。");
     } finally {
@@ -66,6 +74,7 @@ export function DealImporter({ open, onClose, onImported }: Props) {
 
     setBusy(true);
     setMessage("");
+    setSuccess(false);
     const { data } = await supabase.auth.getSession();
     const userId = data.session?.user.id;
     if (!userId) {
@@ -74,40 +83,52 @@ export function DealImporter({ open, onClose, onImported }: Props) {
       return;
     }
 
-    const payload: DealInsert[] = validRows.map(({ draft }) => ({
-      id: crypto.randomUUID(),
-      user_id: userId,
-      brand: draft.brand || null,
-      product_name: draft.product_name || null,
-      product_category: draft.product_category || null,
-      cooperation_date: draft.cooperation_date || null,
-      product_image_url: null,
-      platform: draft.platform || null,
-      platforms: draft.platforms?.length ? draft.platforms : null,
-      advance_required: draft.advance_required,
-      collaboration_type: draft.collaboration_type || null,
-      product_price: null,
-      base_fee: draft.base_fee,
-      commission: draft.commission || null,
-      advance_amount: draft.advance_amount,
-      received_date: draft.received_date || null,
-      shoot_deadline: null,
-      shoot_date: null,
-      publish_deadline: draft.publish_deadline || null,
-      publish_date: draft.publish_date || null,
-      expected_payment_date: draft.expected_payment_date || null,
-      payment_received: draft.payment_received,
-      payment_received_date: draft.payment_received_date || null,
-      expected_refund_date: draft.expected_refund_date || null,
-      refund_received: draft.refund_received,
-      refund_received_date: draft.refund_received_date || null,
-      product_url: null,
-      publish_url: null,
-      notes: draft.notes || null,
-      completed: draft.completed,
-      archived_at: draft.archived_at,
-      deleted_at: null,
-    }));
+    const payload: DealInsert[] = [];
+    let uploadedImages = 0;
+
+    for (const { draft, rowNumber } of validRows) {
+      const dealId = crypto.randomUUID();
+      const embeddedImage = imageFiles.get(rowNumber);
+      const imageUrl = embeddedImage
+        ? await uploadImportedImage(userId, dealId, embeddedImage)
+        : draft.product_image_url || null;
+      if (embeddedImage && imageUrl) uploadedImages += 1;
+
+      payload.push({
+        id: dealId,
+        user_id: userId,
+        brand: draft.brand || null,
+        product_name: draft.product_name || null,
+        product_category: draft.product_category || null,
+        cooperation_date: draft.cooperation_date || null,
+        product_image_url: imageUrl,
+        platform: draft.platform || null,
+        platforms: draft.platforms?.length ? draft.platforms : null,
+        advance_required: draft.advance_required,
+        collaboration_type: draft.collaboration_type || null,
+        product_price: null,
+        base_fee: draft.base_fee,
+        commission: draft.commission || null,
+        advance_amount: draft.advance_amount,
+        received_date: draft.received_date || null,
+        shoot_deadline: null,
+        shoot_date: null,
+        publish_deadline: draft.publish_deadline || null,
+        publish_date: draft.publish_date || null,
+        expected_payment_date: draft.expected_payment_date || null,
+        payment_received: draft.payment_received,
+        payment_received_date: draft.payment_received_date || null,
+        expected_refund_date: draft.expected_refund_date || null,
+        refund_received: draft.refund_received,
+        refund_received_date: draft.refund_received_date || null,
+        product_url: null,
+        publish_url: null,
+        notes: draft.notes || null,
+        completed: draft.completed,
+        archived_at: draft.archived_at,
+        deleted_at: null,
+      });
+    }
 
     const { error } = await supabase.from("deals").insert(payload);
     setBusy(false);
@@ -115,7 +136,10 @@ export function DealImporter({ open, onClose, onImported }: Props) {
       setMessage(error.message);
       return;
     }
-    setMessage(`已成功导入 ${payload.length} 条合作。`);
+    setRows([]);
+    setImageFiles(new Map());
+    setSuccess(true);
+    setMessage(`导入完成：已新增 ${payload.length} 条合作，上传 ${uploadedImages} 张产品图。可以关闭窗口查看列表。`);
     onImported?.();
   }
 
@@ -139,7 +163,12 @@ export function DealImporter({ open, onClose, onImported }: Props) {
           <input type="file" accept=".xlsx" className="sr-only" onChange={parseFile} />
         </label>
 
-        {message ? <p className="mt-4 rounded-[18px] bg-warm/70 p-3 text-sm font-bold text-muted">{message}</p> : null}
+        {message ? (
+          <p className={`mt-4 flex items-start gap-2 rounded-[18px] p-3 text-sm font-bold ${success ? "bg-emerald-50 text-emerald-600" : "bg-warm/70 text-muted"}`}>
+            {success ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : null}
+            <span>{message}</span>
+          </p>
+        ) : null}
 
         {rows.length ? (
           <>
@@ -173,13 +202,25 @@ export function DealImporter({ open, onClose, onImported }: Props) {
           </>
         ) : null}
 
-        <button type="button" disabled={busy || !isSupabaseConfigured || !validRows.length} onClick={importRows} className="primary-button mt-5 w-full justify-center py-4 disabled:opacity-50">
+        <button type="button" disabled={busy || success || !isSupabaseConfigured || !validRows.length} onClick={importRows} className="primary-button mt-5 w-full justify-center py-4 disabled:opacity-50">
           <Upload className="h-5 w-5" />
-          {busy ? "处理中..." : `确认导入 ${validRows.length || ""}`.trim()}
+          {busy ? "处理中..." : success ? "已导入完成" : `确认导入 ${validRows.length || ""}`.trim()}
         </button>
       </div>
     </div>
   );
+}
+
+async function uploadImportedImage(userId: string, dealId: string, file: File) {
+  if (!supabase) return null;
+  const compressed = await compressImageToWebp(file);
+  const path = `${userId}/${dealId}/product.webp`;
+  const { error } = await supabase.storage
+    .from(PRODUCT_IMAGE_BUCKET)
+    .upload(path, compressed, { contentType: compressed.type, upsert: true });
+  if (error) throw error;
+  const { data } = supabase.storage.from(PRODUCT_IMAGE_BUCKET).getPublicUrl(path);
+  return data.publicUrl;
 }
 
 function ImportStat({ label, value }: { label: string; value: number }) {
