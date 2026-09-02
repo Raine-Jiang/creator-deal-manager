@@ -3,6 +3,7 @@ create extension if not exists pgcrypto;
 create or replace function public.auto_confirm_creator_deal_manager_email()
 returns trigger
 language plpgsql
+set search_path = public, auth
 as $$
 begin
   if new.email is not null and new.email_confirmed_at is null then
