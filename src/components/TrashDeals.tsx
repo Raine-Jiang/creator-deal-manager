@@ -32,6 +32,7 @@ export function TrashDeals() {
 
   async function restoreDeal(deal: Deal) {
     if (!supabase) return;
+    setMessage("");
     const { error: restoreError } = await supabase
       .from("deals")
       .update({ deleted_at: null, updated_at: new Date().toISOString() })
@@ -39,6 +40,23 @@ export function TrashDeals() {
     if (restoreError) setMessage(restoreError.message);
     else {
       setMessage("已恢复合作。");
+      reload();
+    }
+  }
+
+  async function permanentlyDeleteDeal(deal: Deal) {
+    if (!supabase) return;
+    const confirmed = window.confirm("确定永久删除这条合作吗？删除后不可恢复。");
+    if (!confirmed) return;
+
+    setMessage("");
+    const { error: deleteError } = await supabase
+      .from("deals")
+      .delete()
+      .eq("id", deal.id);
+    if (deleteError) setMessage(deleteError.message);
+    else {
+      setMessage("已永久删除。");
       reload();
     }
   }
@@ -76,14 +94,24 @@ export function TrashDeals() {
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => restoreDeal(deal)}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-[16px] bg-warm/80 px-4 py-3 text-sm font-black text-ink"
-              >
-                <RotateCcw className="h-4 w-4" />
-                恢复合作
-              </button>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => restoreDeal(deal)}
+                  className="flex items-center justify-center gap-2 rounded-[16px] bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  恢复
+                </button>
+                <button
+                  type="button"
+                  onClick={() => permanentlyDeleteDeal(deal)}
+                  className="flex items-center justify-center gap-2 rounded-[16px] bg-red-50 px-4 py-3 text-sm font-black text-red-500"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  永久删除
+                </button>
+              </div>
             </article>
           ))
         ) : (

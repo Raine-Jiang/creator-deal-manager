@@ -9,13 +9,12 @@ import type { Deal } from "./types";
 type DealScope = boolean | "active" | "completed" | "all" | "trash";
 
 function filterByScope(deals: Deal[], scope: DealScope) {
-  if (scope === "trash") return deals.filter((deal) => Boolean(deal.deleted_at));
-  const visibleDeals = deals.filter((deal) => !deal.deleted_at);
-  if (scope === "all") return visibleDeals;
+  if (scope === "trash") return deals;
+  if (scope === "all") return deals;
   if (scope === true || scope === "completed") {
-    return visibleDeals.filter((deal) => Boolean(deal.completed || deal.archived_at));
+    return deals.filter((deal) => Boolean(deal.completed || deal.archived_at));
   }
-  return visibleDeals.filter((deal) => !deal.completed && !deal.archived_at);
+  return deals.filter((deal) => !deal.completed && !deal.archived_at);
 }
 
 export function useDeals(scope: DealScope = "active") {
@@ -34,10 +33,18 @@ export function useDeals(scope: DealScope = "active") {
       return;
     }
 
-    const { data, error: loadError } = await supabase
+    let query = supabase
       .from("deals")
       .select("*")
       .order("created_at", { ascending: false });
+
+    if (scope === "trash") {
+      query = query.not("deleted_at", "is", null);
+    } else {
+      query = query.is("deleted_at", null);
+    }
+
+    const { data, error: loadError } = await query;
     if (loadError) setError(loadError.message);
     else setDeals(filterByScope((data || []) as Deal[], scope));
     setLoading(false);

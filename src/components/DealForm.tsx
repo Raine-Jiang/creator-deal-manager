@@ -112,17 +112,16 @@ async function compressImageToWebp(file: File) {
 function missingNewBusinessColumns(error: unknown) {
   if (!error || typeof error !== "object") return false;
   const maybeError = error as { code?: string; message?: string };
-  return maybeError.code === "PGRST204" || Boolean(maybeError.message?.includes("product_category") || maybeError.message?.includes("cooperation_date") || maybeError.message?.includes("platforms") || maybeError.message?.includes("advance_required") || maybeError.message?.includes("collaboration_type") || maybeError.message?.includes("deleted_at"));
+  return maybeError.code === "PGRST204" || Boolean(maybeError.message?.includes("product_category") || maybeError.message?.includes("cooperation_date") || maybeError.message?.includes("platforms") || maybeError.message?.includes("advance_required") || maybeError.message?.includes("collaboration_type"));
 }
 
-function withoutNewBusinessColumns<T extends { product_category?: unknown; cooperation_date?: unknown; platforms?: unknown; advance_required?: unknown; collaboration_type?: unknown; deleted_at?: unknown }>(payload: T) {
+function withoutNewBusinessColumns<T extends { product_category?: unknown; cooperation_date?: unknown; platforms?: unknown; advance_required?: unknown; collaboration_type?: unknown }>(payload: T) {
   const next = { ...payload };
   delete next.product_category;
   delete next.cooperation_date;
   delete next.platforms;
   delete next.advance_required;
   delete next.collaboration_type;
-  delete next.deleted_at;
   return next;
 }
 
@@ -278,14 +277,10 @@ export function DealForm({ mode, deal }: Props) {
     if (!confirmed) return;
 
     setSaving(true);
-    let { error: deleteError } = await supabase
+    const { error: deleteError } = await supabase
       .from("deals")
       .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       .eq("id", deal.id);
-    if (deleteError && missingNewBusinessColumns(deleteError)) {
-      const fallback = await supabase.from("deals").delete().eq("id", deal.id);
-      deleteError = fallback.error;
-    }
     setSaving(false);
     if (deleteError) setError(deleteError.message);
     else router.push("/deals");

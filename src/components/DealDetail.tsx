@@ -62,26 +62,30 @@ export function DealDetail({ id }: { id: string }) {
   }, [id, router]);
 
   async function updateDeal(fields: DealUpdate) {
-    if (!deal) return;
+    if (!deal) return false;
     const next = { ...deal, ...fields, updated_at: new Date().toISOString() };
     if (!supabase) {
       setDeal(next);
-      return;
+      return true;
     }
     const { error: updateError } = await supabase
       .from("deals")
       .update({ ...fields, updated_at: next.updated_at } as DealUpdate)
       .eq("id", deal.id);
-    if (updateError) setError(updateError.message);
-    else setDeal(next);
+    if (updateError) {
+      setError(updateError.message);
+      return false;
+    }
+    setDeal(next);
+    return true;
   }
 
   async function moveToTrash() {
     if (!deal) return;
     const confirmed = window.confirm("确定把这条合作移入垃圾桶吗？30 天后会彻底删除。");
     if (!confirmed) return;
-    await updateDeal({ deleted_at: new Date().toISOString() });
-    router.push("/deals");
+    const ok = await updateDeal({ deleted_at: new Date().toISOString() });
+    if (ok) router.push("/deals");
   }
 
   async function submitQuickAction() {
