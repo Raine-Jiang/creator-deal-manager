@@ -143,7 +143,7 @@ Rules:
   - Keep separate from deal commission totals.
   - Finance page owns range statistics and range daily detail.
   - Finance page should not render a long daily earning record list.
-  - Primary input should be a single-day earning card with previous/next day buttons and directly clickable fixed-width date chips, so the user can backfill dates quickly without layout jumping.
+  - Primary input should be a single-day earning card with previous/next day buttons and directly clickable fixed-width date chips for the visible month; selecting a chip must not regenerate the whole strip or cause layout jumping.
   - Selecting a date should load that day's existing record for edit; saving updates it, and the same compact form includes delete for that selected day.
   - Calendar page owns per-day visibility.
 - Profile:
@@ -181,6 +181,10 @@ Rules:
 - `src/app/globals.css`: global visual system.
 - `supabase.sql`: database, RLS and storage setup.
 - `README.md`: user-facing project overview.
+- `docs/PROJECT_HANDOFF.md`: compact project handoff.
+- `docs/VERSION_HISTORY.md`: V1/V2 version summary and V3 candidate ideas.
+- `docs/CONTEXT_MANAGEMENT.md`: low-token AI maintenance workflow.
+- `docs/versions/`: per-version notes.
 
 ## Backend And Security
 

@@ -31,7 +31,8 @@ export function FinancePage() {
   const [earningNotes, setEarningNotes] = useState("");
   const [earningMessage, setEarningMessage] = useState("");
   const [earningSaving, setEarningSaving] = useState(false);
-  const quickDates = useMemo(() => centeredDateKeys(earningDate, 15), [earningDate]);
+  const earningMonth = earningDate.slice(0, 7);
+  const quickDates = useMemo(() => monthDateKeys(earningMonth), [earningMonth]);
   const { deals, loading, error } = useDeals("all");
   const { earnings, loading: earningsLoading, error: earningsError, reload: reloadEarnings } = useDailyEarnings();
   const activeRange: FinanceRange = useMemo(
@@ -205,18 +206,19 @@ export function FinancePage() {
             {quickDates.map((date) => {
               const active = date === earningDate;
               const hasRecord = earnings.some((item) => item.earning_date === date);
+              const day = Number(date.slice(8, 10));
               return (
                 <button
                   key={date}
                   type="button"
                   onClick={() => selectEarningDate(date)}
-                  className={`w-[58px] shrink-0 rounded-[16px] border px-2 py-2 text-center transition-colors ${
+                  className={`grid h-[68px] w-[54px] shrink-0 grid-rows-[18px_24px_8px] place-items-center rounded-[16px] border px-1 py-2 text-center transition-colors ${
                     active ? "border-black bg-black text-white" : "border-black/[0.05] bg-white/72 text-ink"
                   }`}
                 >
                   <p className="text-xs font-black">{shortWeekday(date)}</p>
-                  <p className="mt-0.5 text-xs font-bold opacity-70">{shortMonthDay(date)}</p>
-                  <span className={`mx-auto mt-1 block h-1.5 w-5 rounded-full ${hasRecord ? (active ? "bg-emerald-200" : "bg-emerald-400") : "bg-transparent"}`} />
+                  <p className="text-lg font-black leading-none tabular-nums">{day}</p>
+                  <span className={`block h-1.5 w-5 rounded-full ${hasRecord ? (active ? "bg-emerald-200" : "bg-emerald-400") : "bg-transparent"}`} />
                 </button>
               );
             })}
@@ -299,9 +301,12 @@ function MiniMoney({ label, value }: { label: string; value: string }) {
   );
 }
 
-function centeredDateKeys(center: string, days: number) {
-  const before = Math.floor(days / 2);
-  return Array.from({ length: days }, (_, index) => shiftDateKey(center, index - before));
+function monthDateKeys(monthKey: string) {
+  const [yearText, monthText] = monthKey.split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const days = new Date(year, month, 0).getDate();
+  return Array.from({ length: days }, (_, index) => `${yearText}-${monthText}-${String(index + 1).padStart(2, "0")}`);
 }
 
 function shiftDateKey(value: string, amount: number) {
@@ -314,11 +319,6 @@ function shortWeekday(value: string) {
   const date = new Date(`${value}T00:00:00`);
   const week = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
   return week[date.getDay()] || "";
-}
-
-function shortMonthDay(value: string) {
-  const [, month, day] = value.split("-");
-  return `${Number(month)}月${Number(day)}日`;
 }
 
 function DateField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
