@@ -1,20 +1,18 @@
 "use client";
 
 import type { FormEvent, ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
-import { CircleDollarSign, PencilLine, RotateCcw, Trash2, WalletCards } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, CircleDollarSign, PencilLine, RotateCcw, Trash2, WalletCards } from "lucide-react";
 import type { FinanceRange } from "@/lib/finance";
 import { filterDealsByFinanceRange, getCategoryFinance, getFinanceDateBounds, getFinanceSummary, isDateInBounds } from "@/lib/finance";
 import { fullDate, money } from "@/lib/format";
 import { todayKey } from "@/lib/date-utils";
-import type { DailyEarning } from "@/lib/types";
 import { useDeals } from "@/lib/use-deals";
 import { useDailyEarnings } from "@/lib/use-daily-earnings";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { AppShell } from "./AppShell";
 
 type FinancePreset = Exclude<FinanceRange, { start?: string; end?: string }>;
-type QuickEarningDrafts = Record<string, { amount: string; notes: string }>;
 
 const ranges: Array<{ label: string; value: FinancePreset }> = [
   { label: "本月", value: "currentMonth" },
@@ -33,8 +31,7 @@ export function FinancePage() {
   const [earningNotes, setEarningNotes] = useState("");
   const [earningMessage, setEarningMessage] = useState("");
   const [earningSaving, setEarningSaving] = useState(false);
-  const [quickDrafts, setQuickDrafts] = useState<QuickEarningDrafts>({});
-  const quickDates = useMemo(() => recentDateKeys(14), []);
+  const quickDates = useMemo(() => centeredDateKeys(earningDate, 15), [earningDate]);
   const { deals, loading, error } = useDeals("all");
   const { earnings, loading: earningsLoading, error: earningsError, reload: reloadEarnings } = useDailyEarnings();
   const activeRange: FinanceRange = useMemo(
@@ -55,11 +52,6 @@ export function FinancePage() {
       count: scoped.length,
     };
   }, [activeRange, earnings]);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setQuickDrafts(buildQuickDrafts(quickDates, earnings));
-  }, [earnings, quickDates]);
 
   async function saveDailyEarning(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -111,72 +103,16 @@ export function FinancePage() {
     reloadEarnings();
   }
 
-  async function saveQuickEarnings() {
-    setEarningMessage("");
-    if (!supabase) {
-      setEarningMessage("当前是演示模式，登录 Supabase 后才能保存。");
-      return;
-    }
-
-    setEarningSaving(true);
-    const { data } = await supabase.auth.getSession();
-    const userId = data.session?.user.id;
-    if (!userId) {
-      setEarningSaving(false);
-      setEarningMessage("请先登录后再记录收益。");
-      return;
-    }
-
-    const rows = quickDates
-      .map((date) => {
-        const draft = quickDrafts[date];
-        const amount = Number((draft?.amount || "").replace(/[^\d.]/g, ""));
-        if (!amount) return null;
-        return {
-          user_id: userId,
-          earning_date: date,
-          amount,
-          notes: draft?.notes?.trim() || null,
-        };
-      })
-      .filter((row): row is { user_id: string; earning_date: string; amount: number; notes: string | null } => Boolean(row));
-
-    if (!rows.length) {
-      setEarningSaving(false);
-      setEarningMessage("请至少填写一天的收益金额。");
-      return;
-    }
-
-    const { error: saveError } = await supabase
-      .from("daily_earnings")
-      .upsert(rows, { onConflict: "user_id,earning_date" });
-
-    setEarningSaving(false);
-    if (saveError) {
-      setEarningMessage(saveError.message);
-      return;
-    }
-    setEarningMessage(`已保存 ${rows.length} 天收益。`);
-    reloadEarnings();
-  }
-
-  function setQuickDraft(date: string, key: "amount" | "notes", value: string) {
-    setQuickDrafts((current) => ({
-      ...current,
-      [date]: {
-        amount: current[date]?.amount || "",
-        notes: current[date]?.notes || "",
-        [key]: key === "amount" ? value.replace(/[^\d.]/g, "") : value,
-      },
-    }));
-  }
-
   function selectEarningDate(value: string) {
     const existing = earnings.find((item) => item.earning_date === value);
     setEarningDate(value);
     setEarningAmount(existing ? String(existing.amount || "") : "");
     setEarningNotes(existing?.notes || "");
     setEarningMessage(existing ? `正在编辑 ${fullDate(existing.earning_date)} 的收益。` : "");
+  }
+
+  function moveEarningDate(days: number) {
+    selectEarningDate(shiftDateKey(earningDate, days));
   }
 
   async function deleteDailyEarning() {
@@ -243,7 +179,7 @@ export function FinancePage() {
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-xl font-black">每日收益</h2>
-            <p className="mt-1 text-xs font-bold text-muted">最近 14 天直接填，适合两周集中补录。</p>
+            <p className="mt-1 text-xs font-bold text-muted">左右切换前后一天，也可以直接点下方日期。</p>
           </div>
           <div className="shrink-0 text-right">
             <p className="text-xs font-black text-muted">{dailyEarningStats.count} 天</p>
@@ -251,72 +187,71 @@ export function FinancePage() {
           </div>
         </div>
 
-        <div className="mt-4 space-y-2">
-          {quickDates.map((date) => {
-            const draft = quickDrafts[date] || { amount: "", notes: "" };
-            return (
-              <div key={date} className="grid grid-cols-[72px_1fr] gap-2 rounded-[18px] bg-warm/60 p-2.5">
-                <div className="flex flex-col justify-center">
-                  <p className="text-sm font-black text-ink">{shortWeekday(date)}</p>
-                  <p className="mt-0.5 text-xs font-bold text-muted">{shortMonthDay(date)}</p>
-                </div>
-                <div className="grid min-w-0 grid-cols-[0.9fr_1.1fr] gap-2">
-                  <input
-                    value={draft.amount}
-                    onChange={(event) => setQuickDraft(date, "amount", event.target.value)}
-                    placeholder="收益"
-                    inputMode="decimal"
-                    className="min-w-0 rounded-[14px] bg-white/80 px-3 py-2 text-sm font-black outline-none"
-                  />
-                  <input
-                    value={draft.notes}
-                    onChange={(event) => setQuickDraft(date, "notes", event.target.value)}
-                    placeholder="备注"
-                    className="min-w-0 rounded-[14px] bg-white/80 px-3 py-2 text-sm font-bold outline-none placeholder:text-muted"
-                  />
-                </div>
-              </div>
-            );
-          })}
-          <button type="button" onClick={saveQuickEarnings} disabled={earningSaving || !isSupabaseConfigured} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[16px] bg-black px-4 text-sm font-black text-white disabled:opacity-50">
-            <PencilLine className="h-4 w-4" />
-            {earningSaving ? "保存中..." : "保存最近14天"}
-          </button>
-        </div>
+        <div className="mt-4 rounded-[22px] bg-warm/55 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <button type="button" onClick={() => moveEarningDate(-1)} className="icon-button !h-10 !w-10" aria-label="前一天">
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <div className="min-w-0 text-center">
+              <p className="text-lg font-black">{fullDate(earningDate)}</p>
+              <p className="mt-0.5 text-xs font-bold text-muted">{selectedEarning ? "已有记录，可直接修改" : "还未记录"}</p>
+            </div>
+            <button type="button" onClick={() => moveEarningDate(1)} className="icon-button !h-10 !w-10" aria-label="后一天">
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
 
-        <form onSubmit={saveDailyEarning} className="mt-4 grid gap-2 rounded-[18px] border border-black/[0.04] bg-white/55 p-3">
-          <p className="text-xs font-black text-muted">其他日期</p>
-          <div className="grid grid-cols-[1fr_1.1fr] gap-2">
-            <DateField label="日期" value={earningDate} onChange={selectEarningDate} />
-            <label className="min-w-0 rounded-[16px] bg-warm/70 px-3 py-2">
+          <div className="no-scrollbar -mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1" aria-label="快捷选择收益日期">
+            {quickDates.map((date) => {
+              const active = date === earningDate;
+              const hasRecord = earnings.some((item) => item.earning_date === date);
+              return (
+                <button
+                  key={date}
+                  type="button"
+                  onClick={() => selectEarningDate(date)}
+                  className={`w-[58px] shrink-0 rounded-[16px] border px-2 py-2 text-center transition-colors ${
+                    active ? "border-black bg-black text-white" : "border-black/[0.05] bg-white/72 text-ink"
+                  }`}
+                >
+                  <p className="text-xs font-black">{shortWeekday(date)}</p>
+                  <p className="mt-0.5 text-xs font-bold opacity-70">{shortMonthDay(date)}</p>
+                  <span className={`mx-auto mt-1 block h-1.5 w-5 rounded-full ${hasRecord ? (active ? "bg-emerald-200" : "bg-emerald-400") : "bg-transparent"}`} />
+                </button>
+              );
+            })}
+          </div>
+
+          <form onSubmit={saveDailyEarning} className="mt-3 grid gap-2">
+            <label className="min-w-0 rounded-[16px] bg-white/80 px-3 py-2">
               <span className="text-xs font-black text-muted">收益金额</span>
               <input
                 value={earningAmount}
                 onChange={(event) => setEarningAmount(event.target.value.replace(/[^\d.]/g, ""))}
                 placeholder="0"
                 inputMode="decimal"
-                className="mt-1 w-full min-w-0 bg-transparent text-sm font-black outline-none"
+                className="mt-1 w-full min-w-0 bg-transparent text-xl font-black outline-none"
               />
             </label>
-          </div>
-          <input
-            value={earningNotes}
-            onChange={(event) => setEarningNotes(event.target.value)}
-            placeholder="备注，比如抖音、视频收益、直播收益"
-            className="rounded-[16px] bg-warm/70 px-3 py-3 text-sm font-bold outline-none placeholder:text-muted"
-          />
-          <div className="flex gap-2">
-            <button type="submit" disabled={earningSaving || !isSupabaseConfigured} className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-[16px] bg-black px-4 text-sm font-black text-white disabled:opacity-50">
-              <PencilLine className="h-4 w-4" />
-              {earningSaving ? "保存中..." : selectedEarning ? "保存修改" : "记录当天收益"}
-            </button>
-            {selectedEarning ? (
-              <button type="button" onClick={deleteDailyEarning} disabled={earningSaving} className="flex min-h-11 w-12 items-center justify-center rounded-[16px] bg-rose-50 text-rose-500 disabled:opacity-50" aria-label="删除当天收益">
-                <Trash2 className="h-4 w-4" />
+            <input
+              value={earningNotes}
+              onChange={(event) => setEarningNotes(event.target.value)}
+              placeholder="备注，比如抖音、视频收益、直播收益"
+              className="rounded-[16px] bg-white/80 px-3 py-3 text-sm font-bold outline-none placeholder:text-muted"
+            />
+            <div className="flex gap-2">
+              <button type="submit" disabled={earningSaving || !isSupabaseConfigured} className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-[16px] bg-black px-4 text-sm font-black text-white disabled:opacity-50">
+                <PencilLine className="h-4 w-4" />
+                {earningSaving ? "保存中..." : selectedEarning ? "保存修改" : "记录当天收益"}
               </button>
-            ) : null}
-          </div>
-        </form>
+              {selectedEarning ? (
+                <button type="button" onClick={deleteDailyEarning} disabled={earningSaving} className="flex min-h-11 w-12 items-center justify-center rounded-[16px] bg-rose-50 text-rose-500 disabled:opacity-50" aria-label="删除当天收益">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              ) : null}
+            </div>
+          </form>
+        </div>
 
         {earningMessage ? <p className="mt-3 rounded-[16px] bg-warm/70 px-3 py-2 text-xs font-bold text-muted">{earningMessage}</p> : null}
       </section>
@@ -364,24 +299,15 @@ function MiniMoney({ label, value }: { label: string; value: string }) {
   );
 }
 
-function recentDateKeys(days: number) {
-  const today = new Date(`${todayKey()}T00:00:00`);
-  return Array.from({ length: days }, (_, index) => {
-    const date = new Date(today);
-    date.setDate(today.getDate() - index);
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-  });
+function centeredDateKeys(center: string, days: number) {
+  const before = Math.floor(days / 2);
+  return Array.from({ length: days }, (_, index) => shiftDateKey(center, index - before));
 }
 
-function buildQuickDrafts(dates: string[], earnings: DailyEarning[]): QuickEarningDrafts {
-  return dates.reduce<QuickEarningDrafts>((map, date) => {
-    const existing = earnings.find((item) => item.earning_date === date);
-    map[date] = {
-      amount: existing ? String(existing.amount || "") : "",
-      notes: existing?.notes || "",
-    };
-    return map;
-  }, {});
+function shiftDateKey(value: string, amount: number) {
+  const date = new Date(`${value}T00:00:00`);
+  date.setDate(date.getDate() + amount);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function shortWeekday(value: string) {

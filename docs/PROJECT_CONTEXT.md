@@ -143,8 +143,8 @@ Rules:
   - Keep separate from deal commission totals.
   - Finance page owns range statistics and range daily detail.
   - Finance page should not render a long daily earning record list.
-  - Primary input should be a recent 14-day quick entry grid so the user can batch backfill creator revenue without opening a date picker for every day.
-  - Selecting a date in the daily earning form should load that day's existing record for edit; saving updates it, and the same compact form includes delete for that selected day.
+  - Primary input should be a single-day earning card with previous/next day buttons and directly clickable fixed-width date chips, so the user can backfill dates quickly without layout jumping.
+  - Selecting a date should load that day's existing record for edit; saving updates it, and the same compact form includes delete for that selected day.
   - Calendar page owns per-day visibility.
 - Profile:
   - User name and avatar are stored in Supabase Auth `user_metadata`.
