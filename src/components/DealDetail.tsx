@@ -99,6 +99,18 @@ export function DealDetail({ id }: { id: string }) {
     setSheet(null);
   }
 
+  async function cancelQuickAction() {
+    if (!sheet) return;
+    const fields: DealUpdate =
+      sheet === "publish"
+        ? { publish_date: null, publish_url: null }
+        : sheet === "payment"
+          ? { payment_received: false, payment_received_date: null }
+          : { refund_received: false, refund_received_date: null };
+    await updateDeal(fields);
+    setSheet(null);
+  }
+
   function openSheet(type: ActionType) {
     const savedDate =
       type === "publish" ? deal?.publish_date
@@ -226,6 +238,11 @@ export function DealDetail({ id }: { id: string }) {
               </label>
             ) : null}
             <button onClick={submitQuickAction} className="primary-button mt-4 w-full justify-center py-4">确认</button>
+            {deal && isQuickActionActive(deal, sheet) ? (
+              <button type="button" onClick={cancelQuickAction} className="mt-2 flex w-full items-center justify-center rounded-[18px] bg-rose-50 px-5 py-3 text-sm font-black text-rose-500">
+                取消此记录
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -235,6 +252,10 @@ export function DealDetail({ id }: { id: string }) {
 
 function sheetTitle(type: ActionType) {
   return { publish: "标记已发布", payment: "合作费已收", refund: "本金已返" }[type];
+}
+
+function isQuickActionActive(deal: Deal, type: ActionType) {
+  return type === "publish" ? Boolean(deal.publish_date) : type === "payment" ? deal.payment_received : deal.refund_received;
 }
 
 function QuickButton({ label, active, icon, onClick }: { label: string; active: boolean; icon: ReactNode; onClick: () => void }) {
