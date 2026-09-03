@@ -1,18 +1,20 @@
 "use client";
 
 import type { FormEvent, ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CircleDollarSign, PencilLine, RotateCcw, Trash2, WalletCards } from "lucide-react";
 import type { FinanceRange } from "@/lib/finance";
 import { filterDealsByFinanceRange, getCategoryFinance, getFinanceDateBounds, getFinanceSummary, isDateInBounds } from "@/lib/finance";
 import { fullDate, money } from "@/lib/format";
 import { todayKey } from "@/lib/date-utils";
+import type { DailyEarning } from "@/lib/types";
 import { useDeals } from "@/lib/use-deals";
 import { useDailyEarnings } from "@/lib/use-daily-earnings";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { AppShell } from "./AppShell";
 
 type FinancePreset = Exclude<FinanceRange, { start?: string; end?: string }>;
+type QuickEarningDrafts = Record<string, { amount: string; notes: string }>;
 
 const ranges: Array<{ label: string; value: FinancePreset }> = [
   { label: "本月", value: "currentMonth" },
@@ -31,6 +33,8 @@ export function FinancePage() {
   const [earningNotes, setEarningNotes] = useState("");
   const [earningMessage, setEarningMessage] = useState("");
   const [earningSaving, setEarningSaving] = useState(false);
+  const [quickDrafts, setQuickDrafts] = useState<QuickEarningDrafts>({});
+  const quickDates = useMemo(() => recentDateKeys(14), []);
   const { deals, loading, error } = useDeals("all");
   const { earnings, loading: earningsLoading, error: earningsError, reload: reloadEarnings } = useDailyEarnings();
   const activeRange: FinanceRange = useMemo(
@@ -51,6 +55,11 @@ export function FinancePage() {
       count: scoped.length,
     };
   }, [activeRange, earnings]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setQuickDrafts(buildQuickDrafts(quickDates, earnings));
+  }, [earnings, quickDates]);
 
   async function saveDailyEarning(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -100,6 +109,66 @@ export function FinancePage() {
     }
     setEarningMessage(selectedEarning ? "已更新当天收益。" : "已保存当天收益。");
     reloadEarnings();
+  }
+
+  async function saveQuickEarnings() {
+    setEarningMessage("");
+    if (!supabase) {
+      setEarningMessage("当前是演示模式，登录 Supabase 后才能保存。");
+      return;
+    }
+
+    setEarningSaving(true);
+    const { data } = await supabase.auth.getSession();
+    const userId = data.session?.user.id;
+    if (!userId) {
+      setEarningSaving(false);
+      setEarningMessage("请先登录后再记录收益。");
+      return;
+    }
+
+    const rows = quickDates
+      .map((date) => {
+        const draft = quickDrafts[date];
+        const amount = Number((draft?.amount || "").replace(/[^\d.]/g, ""));
+        if (!amount) return null;
+        return {
+          user_id: userId,
+          earning_date: date,
+          amount,
+          notes: draft?.notes?.trim() || null,
+        };
+      })
+      .filter((row): row is { user_id: string; earning_date: string; amount: number; notes: string | null } => Boolean(row));
+
+    if (!rows.length) {
+      setEarningSaving(false);
+      setEarningMessage("请至少填写一天的收益金额。");
+      return;
+    }
+
+    const { error: saveError } = await supabase
+      .from("daily_earnings")
+      .upsert(rows, { onConflict: "user_id,earning_date" });
+
+    setEarningSaving(false);
+    if (saveError) {
+      setEarningMessage(saveError.message);
+      return;
+    }
+    setEarningMessage(`已保存 ${rows.length} 天收益。`);
+    reloadEarnings();
+  }
+
+  function setQuickDraft(date: string, key: "amount" | "notes", value: string) {
+    setQuickDrafts((current) => ({
+      ...current,
+      [date]: {
+        amount: current[date]?.amount || "",
+        notes: current[date]?.notes || "",
+        [key]: key === "amount" ? value.replace(/[^\d.]/g, "") : value,
+      },
+    }));
   }
 
   function selectEarningDate(value: string) {
@@ -174,7 +243,7 @@ export function FinancePage() {
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-xl font-black">每日收益</h2>
-            <p className="mt-1 text-xs font-bold text-muted">选择日期后直接记录或修改当天收益。</p>
+            <p className="mt-1 text-xs font-bold text-muted">最近 14 天直接填，适合两周集中补录。</p>
           </div>
           <div className="shrink-0 text-right">
             <p className="text-xs font-black text-muted">{dailyEarningStats.count} 天</p>
@@ -182,7 +251,41 @@ export function FinancePage() {
           </div>
         </div>
 
-        <form onSubmit={saveDailyEarning} className="mt-4 grid gap-2">
+        <div className="mt-4 space-y-2">
+          {quickDates.map((date) => {
+            const draft = quickDrafts[date] || { amount: "", notes: "" };
+            return (
+              <div key={date} className="grid grid-cols-[72px_1fr] gap-2 rounded-[18px] bg-warm/60 p-2.5">
+                <div className="flex flex-col justify-center">
+                  <p className="text-sm font-black text-ink">{shortWeekday(date)}</p>
+                  <p className="mt-0.5 text-xs font-bold text-muted">{shortMonthDay(date)}</p>
+                </div>
+                <div className="grid min-w-0 grid-cols-[0.9fr_1.1fr] gap-2">
+                  <input
+                    value={draft.amount}
+                    onChange={(event) => setQuickDraft(date, "amount", event.target.value)}
+                    placeholder="收益"
+                    inputMode="decimal"
+                    className="min-w-0 rounded-[14px] bg-white/80 px-3 py-2 text-sm font-black outline-none"
+                  />
+                  <input
+                    value={draft.notes}
+                    onChange={(event) => setQuickDraft(date, "notes", event.target.value)}
+                    placeholder="备注"
+                    className="min-w-0 rounded-[14px] bg-white/80 px-3 py-2 text-sm font-bold outline-none placeholder:text-muted"
+                  />
+                </div>
+              </div>
+            );
+          })}
+          <button type="button" onClick={saveQuickEarnings} disabled={earningSaving || !isSupabaseConfigured} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[16px] bg-black px-4 text-sm font-black text-white disabled:opacity-50">
+            <PencilLine className="h-4 w-4" />
+            {earningSaving ? "保存中..." : "保存最近14天"}
+          </button>
+        </div>
+
+        <form onSubmit={saveDailyEarning} className="mt-4 grid gap-2 rounded-[18px] border border-black/[0.04] bg-white/55 p-3">
+          <p className="text-xs font-black text-muted">其他日期</p>
           <div className="grid grid-cols-[1fr_1.1fr] gap-2">
             <DateField label="日期" value={earningDate} onChange={selectEarningDate} />
             <label className="min-w-0 rounded-[16px] bg-warm/70 px-3 py-2">
@@ -259,6 +362,37 @@ function MiniMoney({ label, value }: { label: string; value: string }) {
       <p className="mt-1 truncate font-black text-ink">{value}</p>
     </div>
   );
+}
+
+function recentDateKeys(days: number) {
+  const today = new Date(`${todayKey()}T00:00:00`);
+  return Array.from({ length: days }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - index);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  });
+}
+
+function buildQuickDrafts(dates: string[], earnings: DailyEarning[]): QuickEarningDrafts {
+  return dates.reduce<QuickEarningDrafts>((map, date) => {
+    const existing = earnings.find((item) => item.earning_date === date);
+    map[date] = {
+      amount: existing ? String(existing.amount || "") : "",
+      notes: existing?.notes || "",
+    };
+    return map;
+  }, {});
+}
+
+function shortWeekday(value: string) {
+  const date = new Date(`${value}T00:00:00`);
+  const week = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+  return week[date.getDay()] || "";
+}
+
+function shortMonthDay(value: string) {
+  const [, month, day] = value.split("-");
+  return `${Number(month)}月${Number(day)}日`;
 }
 
 function DateField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {

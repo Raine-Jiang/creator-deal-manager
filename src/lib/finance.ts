@@ -72,12 +72,11 @@ export function isDateInBounds(value: string | null | undefined, start: number, 
 
 export function getFinanceSummary(deals: Deal[], range: FinanceRange = "currentMonth") {
   const scopedDeals = filterDealsByFinanceRange(deals, range);
-  const principalDeals = deals;
   return {
     totalCommission: scopedDeals.reduce((total, deal) => total + commissionAmount(deal), 0),
     pendingCommission: scopedDeals.reduce((total, deal) => total + (!deal.payment_received ? commissionAmount(deal) : 0), 0),
-    totalPrincipal: principalDeals.reduce((total, deal) => total + (deal.advance_amount || 0), 0),
-    pendingPrincipal: principalDeals.reduce((total, deal) => total + (!deal.refund_received ? deal.advance_amount || 0 : 0), 0),
+    totalPrincipal: scopedDeals.reduce((total, deal) => total + (deal.advance_amount || 0), 0),
+    pendingPrincipal: scopedDeals.reduce((total, deal) => total + (!deal.refund_received ? deal.advance_amount || 0 : 0), 0),
   };
 }
 

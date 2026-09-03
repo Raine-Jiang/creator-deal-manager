@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Edit3,
   LinkIcon,
+  PackageCheck,
   RotateCcw,
   Send,
   Trash2,
@@ -26,7 +27,7 @@ import { ProductMark } from "./ProductMark";
 import { SetupNotice } from "./SetupNotice";
 import { StatusChip } from "./StatusChip";
 
-type ActionType = "publish" | "payment" | "refund";
+type ActionType = "received" | "publish" | "payment" | "refund";
 type DealUpdate = Partial<Omit<Deal, "id" | "user_id" | "created_at">>;
 
 export function DealDetail({ id }: { id: string }) {
@@ -90,7 +91,9 @@ export function DealDetail({ id }: { id: string }) {
   async function submitQuickAction() {
     if (!sheet) return;
     const fields: DealUpdate =
-      sheet === "publish"
+      sheet === "received"
+        ? { received_date: actionDate }
+        : sheet === "publish"
           ? { publish_date: actionDate, publish_url: publishUrl || deal?.publish_url || null }
           : sheet === "payment"
             ? { payment_received: true, payment_received_date: actionDate }
@@ -102,7 +105,9 @@ export function DealDetail({ id }: { id: string }) {
   async function cancelQuickAction() {
     if (!sheet) return;
     const fields: DealUpdate =
-      sheet === "publish"
+      sheet === "received"
+        ? { received_date: null }
+        : sheet === "publish"
         ? { publish_date: null, publish_url: null }
         : sheet === "payment"
           ? { payment_received: false, payment_received_date: null }
@@ -113,9 +118,10 @@ export function DealDetail({ id }: { id: string }) {
 
   function openSheet(type: ActionType) {
     const savedDate =
-      type === "publish" ? deal?.publish_date
-        : type === "payment" ? deal?.payment_received_date
-          : deal?.refund_received_date;
+      type === "received" ? deal?.received_date
+        : type === "publish" ? deal?.publish_date
+          : type === "payment" ? deal?.payment_received_date
+            : deal?.refund_received_date;
     setActionDate(savedDate || todayKey());
     setPublishUrl(deal?.publish_url || "");
     setSheet(type);
@@ -166,6 +172,7 @@ export function DealDetail({ id }: { id: string }) {
           <section className="rounded-[24px] border border-blue-200 bg-[linear-gradient(135deg,#f5fbff,#e7f2ff)] p-4 shadow-soft">
             <h3 className="mb-3 text-lg font-black">快捷记录</h3>
             <div className="grid grid-cols-2 gap-2.5">
+              <QuickButton label="收货情况" active={Boolean(deal.received_date)} icon={<PackageCheck className="h-4 w-4" />} onClick={() => openSheet("received")} />
               <QuickButton label="已发布" active={Boolean(deal.publish_date)} icon={<Send className="h-4 w-4" />} onClick={() => openSheet("publish")} />
               <QuickButton label="合作费已收" active={deal.payment_received} icon={<WalletCards className="h-4 w-4" />} onClick={() => openSheet("payment")} />
               <QuickButton label="本金已返" active={deal.refund_received} icon={<RotateCcw className="h-4 w-4" />} onClick={() => openSheet("refund")} />
@@ -251,11 +258,17 @@ export function DealDetail({ id }: { id: string }) {
 }
 
 function sheetTitle(type: ActionType) {
-  return { publish: "标记已发布", payment: "合作费已收", refund: "本金已返" }[type];
+  return { received: "标记已收货", publish: "标记已发布", payment: "合作费已收", refund: "本金已返" }[type];
 }
 
 function isQuickActionActive(deal: Deal, type: ActionType) {
-  return type === "publish" ? Boolean(deal.publish_date) : type === "payment" ? deal.payment_received : deal.refund_received;
+  return type === "received"
+    ? Boolean(deal.received_date)
+    : type === "publish"
+      ? Boolean(deal.publish_date)
+      : type === "payment"
+        ? deal.payment_received
+        : deal.refund_received;
 }
 
 function QuickButton({ label, active, icon, onClick }: { label: string; active: boolean; icon: ReactNode; onClick: () => void }) {

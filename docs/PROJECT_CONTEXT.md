@@ -136,13 +136,14 @@ Rules:
 - Finance:
   - Period filters: current month, last month, last three months, last year, all time, custom start/end.
   - Deal commission period is based on `publish_deadline`.
-  - Principal totals are overall pending/total values unless the user asks to periodize them.
+  - Principal totals are also periodized by `publish_deadline`; changing finance month/range should change total principal and pending principal.
   - Category analysis uses `product_category`; missing values are `未分类`.
 - Daily creator revenue:
   - Period is based on `earning_date`.
   - Keep separate from deal commission totals.
   - Finance page owns range statistics and range daily detail.
   - Finance page should not render a long daily earning record list.
+  - Primary input should be a recent 14-day quick entry grid so the user can batch backfill creator revenue without opening a date picker for every day.
   - Selecting a date in the daily earning form should load that day's existing record for edit; saving updates it, and the same compact form includes delete for that selected day.
   - Calendar page owns per-day visibility.
 - Profile:
