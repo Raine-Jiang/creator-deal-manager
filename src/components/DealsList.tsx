@@ -40,6 +40,8 @@ export function DealsList() {
       })
       .sort((a, b) => sortPublishDate(a.publish_deadline, b.publish_deadline, sortBy));
   }, [deals, dateFilter, filter, query, sortBy]);
+  const filteredIds = useMemo(() => filteredDeals.map((deal) => deal.id), [filteredDeals]);
+  const allVisibleSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id));
 
   return (
     <AppShell>
@@ -111,10 +113,15 @@ export function DealsList() {
           {selectMode ? "取消选择" : "批量管理"}
         </button>
         {selectMode ? (
-          <button type="button" disabled={!selectedIds.length || deleting} onClick={batchDelete} className="flex items-center gap-1.5 rounded-full bg-black px-4 py-2 text-sm font-black text-white disabled:opacity-40">
-            <Trash2 className="h-4 w-4" />
-            {deleting ? "删除中..." : `删除 ${selectedIds.length} 条`}
-          </button>
+          <div className="flex items-center gap-2">
+            <button type="button" disabled={!filteredIds.length} onClick={toggleSelectAllVisible} className="rounded-full border border-black/[0.06] bg-white/72 px-4 py-2 text-sm font-black disabled:opacity-40">
+              {allVisibleSelected ? "取消全选" : "全选"}
+            </button>
+            <button type="button" disabled={!selectedIds.length || deleting} onClick={batchDelete} className="flex items-center gap-1.5 rounded-full bg-black px-4 py-2 text-sm font-black text-white disabled:opacity-40">
+              <Trash2 className="h-4 w-4" />
+              {deleting ? "删除中..." : `删除 ${selectedIds.length} 条`}
+            </button>
+          </div>
         ) : null}
       </div>
 
@@ -150,6 +157,14 @@ export function DealsList() {
 
   function toggleSelected(id: string) {
     setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  }
+
+  function toggleSelectAllVisible() {
+    setSelectedIds((current) => {
+      const visible = new Set(filteredIds);
+      if (allVisibleSelected) return current.filter((id) => !visible.has(id));
+      return Array.from(new Set([...current, ...filteredIds]));
+    });
   }
 
   async function batchDelete() {

@@ -114,10 +114,33 @@ Rules:
 - Re-entering the same date updates that day's amount and notes.
 - Finance page uses the same range selector to summarize daily earnings.
 
+### `deal_action_logs`
+
+Separate append-only Supabase table for deal quick action history.
+
+Fields:
+
+- `id`
+- `user_id`
+- `deal_id`
+- `action_type`
+- `action_label`
+- `action_value`
+- `action_date`
+- `created_at`
+
+Rules:
+
+- Used by deal detail quick records.
+- Every quick action click should insert a log row.
+- Clicking an inactive quick action marks it active and logs `action_value = true`.
+- Clicking an active quick action cancels it and logs `action_value = false`.
+- Export includes these logs per deal.
+
 ## Data Logic
 
 - Deal list default order: `created_at DESC`.
-- Deal list supports batch soft delete into trash.
+- Deal list supports batch soft delete into trash and select-all for the current filtered result set.
 - Home order: `需要关注`, `财务提醒`, `合作统计`, `最近合作`.
 - Need-attention logic:
   - Upcoming publish-related work should be based on `publish_deadline`.
@@ -158,6 +181,7 @@ Rules:
   - After a successful import, clear the preview and show a clear success message to prevent duplicate repeated imports.
 - Excel export:
   - Let the user choose date basis and time range before downloading.
+  - Include per-deal quick action logs.
 
 ## Key Files
 
@@ -165,6 +189,7 @@ Rules:
 - `src/lib/supabase.ts`: Supabase typed client.
 - `src/lib/use-deals.ts`: deal loading and persistence hook.
 - `src/lib/use-daily-earnings.ts`: daily creator revenue hook.
+- `src/components/DealDetail.tsx`: detail page and immediate quick action logging.
 - `src/lib/deal-status.ts`: derived status logic.
 - `src/lib/finance.ts`: finance period and summary calculations.
 - `src/lib/import-deals.ts`: Excel import parsing.

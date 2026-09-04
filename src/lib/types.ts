@@ -50,6 +50,19 @@ export type Deal = {
   deleted_at: string | null;
 };
 
+export type DealActionType = "received" | "publish" | "payment" | "refund" | "complete";
+
+export type DealActionLog = {
+  id: string;
+  user_id: string | null;
+  deal_id: string;
+  action_type: DealActionType;
+  action_label: string;
+  action_value: boolean;
+  action_date: string | null;
+  created_at: string;
+};
+
 export type DealFormValues = Omit<
   Deal,
   "id" | "user_id" | "created_at" | "updated_at" | "product_image_url"

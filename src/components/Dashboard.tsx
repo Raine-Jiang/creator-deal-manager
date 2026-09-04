@@ -28,7 +28,7 @@ import { commissionAmount, getFinanceSummary } from "@/lib/finance";
 import { fullDate, fullDateTime, money, shortDate } from "@/lib/format";
 import { compressImageToWebp } from "@/lib/images";
 import { isSupabaseConfigured, PRODUCT_IMAGE_BUCKET, supabase } from "@/lib/supabase";
-import type { Deal } from "@/lib/types";
+import type { Deal, DealActionLog } from "@/lib/types";
 import { useDeals } from "@/lib/use-deals";
 import { AppShell } from "./AppShell";
 import { DealImporter } from "./DealImporter";
@@ -183,9 +183,10 @@ export function Dashboard() {
     }
   }
 
-  function exportDeals() {
+  async function exportDeals() {
     const scopedDeals = filterDealsForExport(deals, exportBasis, exportRange, exportStart, exportEnd);
-    const columns = ["状态", "品牌", "产品", "品类", "合作形式", "是否垫付", "本金", "佣金", "接单日期", "最晚发布", "已收货", "已发布", "返本情况", "返佣情况", "完成时间", "备注"];
+    const logsByDeal = await loadActionLogs(scopedDeals);
+    const columns = ["状态", "品牌", "产品", "品类", "合作形式", "是否垫付", "本金", "佣金", "接单日期", "最晚发布", "已收货", "已发布", "返本情况", "返佣情况", "完成时间", "快捷记录日志", "备注"];
     const rows = scopedDeals.map((deal) => [
       getDealStatus(deal),
       deal.brand || "",
@@ -202,6 +203,7 @@ export function Dashboard() {
       deal.refund_received ? "已返本" : "",
       deal.payment_received ? "已返佣" : "",
       fullDateTime(deal.archived_at) || "",
+      formatActionLogs(logsByDeal.get(deal.id) || []),
       deal.notes || "",
     ]);
     const table = [columns, ...rows]
@@ -218,6 +220,25 @@ export function Dashboard() {
     setExportOpen(false);
     setProfileMessage(`已导出 ${scopedDeals.length} 条合作。`);
     setProfileError(false);
+  }
+
+  async function loadActionLogs(scopedDeals: Deal[]) {
+    const logsByDeal = new Map<string, DealActionLog[]>();
+    if (!supabase || !scopedDeals.length) return logsByDeal;
+    const { data, error: logsError } = await supabase
+      .from("deal_action_logs")
+      .select("*")
+      .in("deal_id", scopedDeals.map((deal) => deal.id))
+      .order("created_at", { ascending: true });
+    if (logsError) {
+      setProfileError(true);
+      setProfileMessage(logsError.message);
+      return logsByDeal;
+    }
+    (data as DealActionLog[] | null)?.forEach((log) => {
+      logsByDeal.set(log.deal_id, [...(logsByDeal.get(log.deal_id) || []), log]);
+    });
+    return logsByDeal;
   }
 
   return (
@@ -556,6 +577,17 @@ function EmptyLine({ icon, text }: { icon: ReactNode; text: string }) {
 
 function escapeCell(value: string) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function formatActionLogs(logs: DealActionLog[]) {
+  return logs
+    .map((log) => {
+      const time = fullDateTime(log.created_at) || log.created_at;
+      const value = log.action_value ? "标记" : "取消";
+      const date = log.action_date ? `（日期：${fullDate(log.action_date)}）` : "";
+      return `${time} ${value}${log.action_label}${date}`;
+    })
+    .join("\n");
 }
 
 type ExportDateBasis = "created_at" | "cooperation_date" | "publish_deadline" | "publish_date" | "received_date" | "expected_payment_date" | "expected_refund_date";

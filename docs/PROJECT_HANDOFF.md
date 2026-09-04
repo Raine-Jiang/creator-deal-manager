@@ -21,6 +21,8 @@ It is designed as a personal, low-cost tool first, while keeping the backend rea
 - Create, edit, view, complete, soft-delete, restore and permanently delete deals.
 - Upload product images; images are compressed to WebP before upload.
 - Deal list supports search, status filters, publish-date sorting and batch delete.
+- Batch management supports selecting all deals in the current filtered result set.
+- Deal detail quick record buttons update immediately and store each mark/cancel click in `deal_action_logs`.
 - Calendar uses `publish_deadline` as the primary date.
 - Finance uses `publish_deadline` for deal commission/principal periods.
 - Daily creator revenue is stored separately in `daily_earnings` and is summarized in Finance.
@@ -34,6 +36,7 @@ It is designed as a personal, low-cost tool first, while keeping the backend rea
 - Do not count trashed deals in dashboard, calendar or finance.
 - Keep `publish_deadline` as the main date unless the user explicitly changes the rule.
 - Daily creator revenue must not be mixed with deal commission.
+- Quick record history must stay append-only so exported data preserves each click, not only the latest status.
 - Keep bottom navigation fixed and avoid horizontal overflow on mobile.
 
 ## Before Editing
@@ -54,4 +57,3 @@ npm run build
 ```
 
 For UI work, also check 375px, 390px and 430px mobile widths.
-

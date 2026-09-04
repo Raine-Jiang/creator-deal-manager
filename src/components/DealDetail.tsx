@@ -28,6 +28,7 @@ import { SetupNotice } from "./SetupNotice";
 import { StatusChip } from "./StatusChip";
 
 type ActionType = "received" | "publish" | "payment" | "refund";
+type LoggedActionType = ActionType | "complete";
 type DealUpdate = Partial<Omit<Deal, "id" | "user_id" | "created_at">>;
 
 export function DealDetail({ id }: { id: string }) {
@@ -37,9 +38,6 @@ export function DealDetail({ id }: { id: string }) {
   );
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [error, setError] = useState("");
-  const [sheet, setSheet] = useState<ActionType | null>(null);
-  const [actionDate, setActionDate] = useState(todayKey());
-  const [publishUrl, setPublishUrl] = useState("");
 
   useEffect(() => {
     if (!supabase) return;
@@ -88,43 +86,44 @@ export function DealDetail({ id }: { id: string }) {
     if (ok) router.push("/deals");
   }
 
-  async function submitQuickAction() {
-    if (!sheet) return;
+  async function toggleQuickAction(type: ActionType) {
+    if (!deal) return;
+    const active = isQuickActionActive(deal, type);
+    const actionDate = todayKey();
     const fields: DealUpdate =
-      sheet === "received"
-        ? { received_date: actionDate }
-        : sheet === "publish"
-          ? { publish_date: actionDate, publish_url: publishUrl || deal?.publish_url || null }
-          : sheet === "payment"
-            ? { payment_received: true, payment_received_date: actionDate }
-            : { refund_received: true, refund_received_date: actionDate };
-    await updateDeal(fields);
-    setSheet(null);
+      type === "received"
+        ? { received_date: active ? null : actionDate }
+        : type === "publish"
+          ? { publish_date: active ? null : actionDate }
+          : type === "payment"
+            ? { payment_received: !active, payment_received_date: active ? null : actionDate }
+            : { refund_received: !active, refund_received_date: active ? null : actionDate };
+    const ok = await updateDeal(fields);
+    if (ok) await logQuickAction(type, !active, active ? null : actionDate);
   }
 
-  async function cancelQuickAction() {
-    if (!sheet) return;
-    const fields: DealUpdate =
-      sheet === "received"
-        ? { received_date: null }
-        : sheet === "publish"
-        ? { publish_date: null, publish_url: null }
-        : sheet === "payment"
-          ? { payment_received: false, payment_received_date: null }
-          : { refund_received: false, refund_received_date: null };
-    await updateDeal(fields);
-    setSheet(null);
+  async function toggleCompleteAction() {
+    if (!deal) return;
+    const active = Boolean(deal.completed || deal.archived_at);
+    const now = new Date().toISOString();
+    const ok = await updateDeal(active ? { completed: false, archived_at: null } : { completed: true, archived_at: now });
+    if (ok) await logQuickAction("complete", !active, active ? null : todayKey());
   }
 
-  function openSheet(type: ActionType) {
-    const savedDate =
-      type === "received" ? deal?.received_date
-        : type === "publish" ? deal?.publish_date
-          : type === "payment" ? deal?.payment_received_date
-            : deal?.refund_received_date;
-    setActionDate(savedDate || todayKey());
-    setPublishUrl(deal?.publish_url || "");
-    setSheet(type);
+  async function logQuickAction(type: LoggedActionType, value: boolean, actionDate: string | null) {
+    if (!deal || !supabase) return;
+    const { data } = await supabase.auth.getSession();
+    const userId = data.session?.user.id;
+    if (!userId) return;
+    const { error: logError } = await supabase.from("deal_action_logs").insert({
+      user_id: userId,
+      deal_id: deal.id,
+      action_type: type,
+      action_label: actionLabel(type),
+      action_value: value,
+      action_date: actionDate,
+    });
+    if (logError) setError(logError.message);
   }
 
   return (
@@ -172,15 +171,15 @@ export function DealDetail({ id }: { id: string }) {
           <section className="rounded-[24px] border border-blue-200 bg-[linear-gradient(135deg,#f5fbff,#e7f2ff)] p-4 shadow-soft">
             <h3 className="mb-3 text-lg font-black">快捷记录</h3>
             <div className="grid grid-cols-2 gap-2.5">
-              <QuickButton label="收货情况" active={Boolean(deal.received_date)} icon={<PackageCheck className="h-4 w-4" />} onClick={() => openSheet("received")} />
-              <QuickButton label="已发布" active={Boolean(deal.publish_date)} icon={<Send className="h-4 w-4" />} onClick={() => openSheet("publish")} />
-              <QuickButton label="合作费已收" active={deal.payment_received} icon={<WalletCards className="h-4 w-4" />} onClick={() => openSheet("payment")} />
-              <QuickButton label="本金已返" active={deal.refund_received} icon={<RotateCcw className="h-4 w-4" />} onClick={() => openSheet("refund")} />
+              <QuickButton label="收货情况" active={Boolean(deal.received_date)} icon={<PackageCheck className="h-4 w-4" />} onClick={() => toggleQuickAction("received")} />
+              <QuickButton label="已发布" active={Boolean(deal.publish_date)} icon={<Send className="h-4 w-4" />} onClick={() => toggleQuickAction("publish")} />
+              <QuickButton label="合作费已收" active={deal.payment_received} icon={<WalletCards className="h-4 w-4" />} onClick={() => toggleQuickAction("payment")} />
+              <QuickButton label="本金已返" active={deal.refund_received} icon={<RotateCcw className="h-4 w-4" />} onClick={() => toggleQuickAction("refund")} />
               <QuickButton
                 label="完成合作"
                 active={Boolean(deal.completed || deal.archived_at)}
                 icon={<CheckCircle2 className="h-4 w-4" />}
-                onClick={() => updateDeal(deal.completed || deal.archived_at ? { completed: false, archived_at: null } : { completed: true, archived_at: new Date().toISOString() })}
+                onClick={toggleCompleteAction}
               />
             </div>
           </section>
@@ -230,35 +229,12 @@ export function DealDetail({ id }: { id: string }) {
         </div>
       ) : null}
 
-      {sheet ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/20 px-3 pb-3" onClick={() => setSheet(null)}>
-          <div className="w-full max-w-[430px] rounded-[28px] bg-white p-5 shadow-lift" onClick={(event) => event.stopPropagation()}>
-            <h3 className="text-xl font-black">{sheetTitle(sheet)}</h3>
-            <label className="form-row mt-3">
-              <span>日期</span>
-              <input type="date" value={actionDate} onChange={(event) => setActionDate(event.target.value)} className="form-control" />
-            </label>
-            {sheet === "publish" ? (
-              <label className="form-row">
-                <span>链接</span>
-                <input value={publishUrl} onChange={(event) => setPublishUrl(event.target.value)} placeholder="发布链接（选填）" className="form-control" />
-              </label>
-            ) : null}
-            <button onClick={submitQuickAction} className="primary-button mt-4 w-full justify-center py-4">确认</button>
-            {deal && isQuickActionActive(deal, sheet) ? (
-              <button type="button" onClick={cancelQuickAction} className="mt-2 flex w-full items-center justify-center rounded-[18px] bg-rose-50 px-5 py-3 text-sm font-black text-rose-500">
-                取消此记录
-              </button>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
     </AppShell>
   );
 }
 
-function sheetTitle(type: ActionType) {
-  return { received: "标记已收货", publish: "标记已发布", payment: "合作费已收", refund: "本金已返" }[type];
+function actionLabel(type: LoggedActionType) {
+  return { received: "收货情况", publish: "发布情况", payment: "返佣情况", refund: "返本情况", complete: "完成合作" }[type];
 }
 
 function isQuickActionActive(deal: Deal, type: ActionType) {

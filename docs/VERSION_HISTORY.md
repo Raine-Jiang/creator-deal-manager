@@ -45,6 +45,7 @@ Main work:
   - search
   - publish-date sorting
   - batch delete
+  - select all in the current filtered result set
 - Deal lifecycle:
   - waiting to publish
   - published
@@ -86,6 +87,10 @@ Main work:
   - upload avatar
   - change password
   - access completed deals, trash and export
+- Quick record logs:
+  - deal detail quick actions update immediately without a confirmation sheet
+  - every mark/cancel click is stored in `deal_action_logs`
+  - Excel export includes quick action history per deal
 - Project context:
   - `docs/PROJECT_CONTEXT.md`
   - `AGENTS.md`
@@ -108,4 +113,3 @@ Do not implement until the user explicitly requests V3.
 - More financial reporting.
 - Optional multi-user collaboration.
 - Data backup automation.
-

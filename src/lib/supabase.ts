@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import type { DailyEarning, Deal } from "./types";
+import type { DailyEarning, Deal, DealActionLog } from "./types";
 
 export type Database = {
   public: {
@@ -21,6 +21,18 @@ export type Database = {
           amount: number;
         };
         Update: Partial<Omit<DailyEarning, "created_at" | "user_id">>;
+        Relationships: [];
+      };
+      deal_action_logs: {
+        Row: DealActionLog;
+        Insert: Partial<Omit<DealActionLog, "id" | "created_at">> & {
+          user_id: string;
+          deal_id: string;
+          action_type: DealActionLog["action_type"];
+          action_label: string;
+          action_value: boolean;
+        };
+        Update: never;
         Relationships: [];
       };
     };

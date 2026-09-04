@@ -202,6 +202,47 @@ on public.daily_earnings for delete
 to authenticated
 using ((select auth.uid()) = user_id);
 
+create table if not exists public.deal_action_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  deal_id uuid not null references public.deals(id) on delete cascade,
+  action_type text not null check (action_type in ('received', 'publish', 'payment', 'refund', 'complete')),
+  action_label text not null,
+  action_value boolean not null,
+  action_date date,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists deal_action_logs_user_created_idx
+  on public.deal_action_logs (user_id, created_at desc);
+
+create index if not exists deal_action_logs_deal_created_idx
+  on public.deal_action_logs (deal_id, created_at desc);
+
+alter table public.deal_action_logs enable row level security;
+
+grant select, insert on public.deal_action_logs to authenticated;
+
+drop policy if exists "Users can read own deal action logs" on public.deal_action_logs;
+create policy "Users can read own deal action logs"
+on public.deal_action_logs for select
+to authenticated
+using ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can insert own deal action logs" on public.deal_action_logs;
+create policy "Users can insert own deal action logs"
+on public.deal_action_logs for insert
+to authenticated
+with check (
+  (select auth.uid()) = user_id
+  and exists (
+    select 1
+    from public.deals
+    where deals.id = deal_action_logs.deal_id
+      and deals.user_id = (select auth.uid())
+  )
+);
+
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'deal-product-images',
